@@ -1,18 +1,25 @@
 <?php
 
 use App\User;
+use Common\Auth\Permissions\Permission;
+use Common\Database\MigrateAndSeed;
+use Common\Files\Controllers\UploadFaviconController;
 use Common\Settings\DotEnvEditor;
+use Illuminate\Encryption\Encrypter;
+use Illuminate\Foundation\Application;
 
 class Installer
 {
     /**
-     * @var string Application base path.
+     * @var string
      */
     protected $baseDirectory;
 
     /**
-     * Constructor/Router
+     * @var string
      */
+    private $logFile;
+
     public function __construct()
     {
         $this->baseDirectory = PATH_INSTALL;
@@ -43,18 +50,19 @@ class Installer
 
     protected function onCheckRequirements()
     {
-        $this->createHtaccessFiles();
-
         $this->log('Check requirements: start');
+
+        $this->createHtaccessFiles();
 
         $result = [
             'PHP Version' => ['result' => version_compare(PHP_VERSION, MINIMUM_VERSION, '>'), 'errorMessage' => 'You need at least ' . MINIMUM_VERSION . ' PHP Version to install.'],
-            'PROC_OPEN' => ['result' => function_exists('proc_open'), 'errorMessage' => 'PHP proc_open function needs to be enabled.'],
             'PDO' => ['result' => defined('PDO::ATTR_DRIVER_NAME'), 'errorMessage' => 'PHP PDO extension is required.',],
+            'XML' => ['result' => extension_loaded('xml'), 'errorMessage' => 'PHP XML extension is required.',],
             'Mbstring' => ['result' => extension_loaded('mbstring'), 'errorMessage' => 'PHP mbstring extension is required.',],
             'Fileinfo' => ['result' => extension_loaded('fileinfo'), 'errorMessage' => 'PHP fileinfo extension is required.'],
             'OpenSSL' => ['result' => extension_loaded('openssl'), 'errorMessage' => 'PHP openssl extension is required.'],
-            'GD' => ['result' => extension_loaded('gd'), 'errorMessage' => 'PHP openssl extension is required.'],
+            'GD' => ['result' => extension_loaded('gd'), 'errorMessage' => 'PHP GD extension is required.'],
+            'fpassthru' => ['result' => function_exists('fpassthru'), 'errorMessage' => '"fpassthru" PHP function needs to be enabled.'],
             'Curl' => ['result' => extension_loaded('curl'), 'errorMessage' => 'PHP curl functionality needs to be enabled.'],
             'Zip' => ['result' => class_exists('ZipArchive'), 'errorMessage' => 'PHP ZipArchive extension needs to be installed.'],
         ];
@@ -79,7 +87,6 @@ class Installer
             'storage/logs',
             'storage/framework',
             'public/storage',
-            'resources/views/emails/custom',
         ];
 
         $results = [];
@@ -89,7 +96,7 @@ class Installer
             $result = ['path' => $path, 'result' => $writable, 'errorMessage' => ''];
             if ( ! $writable) {
                 $result['errorMessage'] = is_dir($path) ?
-                    'Make this directory writable by giving it 755 permissions via file manager.' :
+                    'Make this directory writable by giving it 0755 or 0777 permissions via file manager.' :
                     'Make this directory writable by giving it 644 permissions via file manager.';
             }
 
@@ -97,17 +104,22 @@ class Installer
         }
 
         $files = [
-            '.env.example',
+            '.htaccess',
+            'public/.htaccess',
         ];
 
-        foreach ($files as $file) {
-            $filePath = "{$this->baseDirectory}/$file";
-            $writable = is_writable($filePath);
-            $content = $writable ? trim(file_get_contents($filePath)) : '';
-
+        if ( ! $this->fileExistsAndNotEmpty('.env') && ! $this->fileExistsAndNotEmpty('env.example')) {
             $results[] = [
-                'path' => $filePath,
-                'result' => $writable && strlen($content),
+                'path' => $this->baseDirectory,
+                'result' => false,
+                'errorMessage' => "Make sure <strong>env.example</strong> or <strong>.env</strong> file has been uploaded properly to the directory above and is writable.",
+            ];
+        }
+
+        foreach ($files as $file) {
+            $results[] = [
+                'path' => "{$this->baseDirectory}/$file",
+                'result' => $this->fileExistsAndNotEmpty($file),
                 'errorMessage' => "Make sure <strong>$file</strong> file has been uploaded properly to your server and is writable."
             ];
         }
@@ -121,11 +133,27 @@ class Installer
         return $results;
     }
 
+    /**
+     * @param string $path
+     * @return bool
+     */
+    protected function fileExistsAndNotEmpty($path)
+    {
+        $filePath = "{$this->baseDirectory}/$path";
+        $writable = is_writable($filePath);
+        $content = $writable ? trim(file_get_contents($filePath)) : '';
+        return $writable && strlen($content);
+    }
+
     protected function onValidateAndInsertDatabaseCredentials()
     {
-        if (!strlen($this->post('db_host'))) throw new InstallerException('Please specify a database host.', 'db_host');
+        if (!strlen($this->post('db_host'))) {
+            throw new InstallerException('Please specify a database host.', 'db_host');
+        }
 
-        if (!strlen($this->post('db_database'))) throw new InstallerException('Please specify the database name.', 'db_database');
+        if (!strlen($this->post('db_database'))) {
+            throw new InstallerException('Please specify the database name.', 'db_database');
+        }
 
         $config = ['db_host' => null, 'db_database' => null, 'db_port' => null, 'db_username' => null, 'db_password' => null, 'db_prefix' => null];
         array_walk($config, function (&$value, $key) {
@@ -177,18 +205,26 @@ class Installer
     {
         $this->bootFramework();
 
-        //fix "index is too long" issue on MariaDB and older mysql versions
+        // Fix "index is too long" issue on MariaDB and older mysql versions
         Schema::defaultStringLength(191);
 
-        Artisan::call('key:generate', ['--force' => true]);
-        Artisan::call('migrate', ['--force' => true]);
+        // Generate key
+        $appKey = 'base64:'.base64_encode(
+            Encrypter::generateKey(config('app.cipher') )
+        );
 
-        $this->createAdminAccount();
+        app(DotEnvEditor::class)->write([
+            'app_key' => $appKey,
+        ]);
 
-        Artisan::call('db:seed', ['--force' => true]);
-        Artisan::call('common:seed');
+        app(MigrateAndSeed::class)->execute(function() {
+            $this->createAdminAccount();
+        });
 
         $this->putAppInProductionEnv();
+
+        // move default favicons
+        File::copyDirectory("$this->baseDirectory/assets/favicons", public_path(UploadFaviconController::FAVICON_DIR));
 
         Cache::flush();
 
@@ -199,21 +235,6 @@ class Installer
         }
     }
 
-    protected function createHtaccessFiles() {
-        $rootHtaccess = "{$this->baseDirectory}/.htaccess";
-        $rootHtaccessStub = "{$this->baseDirectory}/public/install_files/stubs/root-htaccess.txt";
-        $publicHtaccess = "{$this->baseDirectory}/public/.htaccess";
-        $publicHtaccessStub = "{$this->baseDirectory}/public/install_files/stubs/public-htaccess.txt";
-
-        if ( ! file_exists($rootHtaccess)) {
-            file_put_contents($rootHtaccess, file_get_contents($rootHtaccessStub));
-        }
-
-        if ( ! file_exists($publicHtaccess)) {
-            file_put_contents($publicHtaccess, file_get_contents($publicHtaccessStub));
-        }
-    }
-
     public function createAdminAccount()
     {
         $email = $this->post('email');
@@ -221,9 +242,19 @@ class Installer
         $user->username = $this->post('username');
         $user->email = $email;
         $user->password = Hash::make($this->post('password'));
-        $user->permissions = ['admin' => 1, 'superAdmin' => 1];
+        $user->email_verified_at = now();
+        $user->api_token = Str::random(40);
         $user->save();
-
+        $adminPermission = app(Permission::class)->firstOrCreate(
+            ['name' => 'admin'],
+            [
+                'name' => 'admin',
+                'group' => 'admin',
+                'display_name' => 'Super Admin',
+                'description' => 'Give all permissions to user.',
+            ]
+        );
+        $user->permissions()->attach($adminPermission->id);
         Auth::login($user);
     }
 
@@ -239,14 +270,14 @@ class Installer
         $this->bootFramework();
 
         $envFile = $this->baseDirectory . '/.env';
-        $envExampleFile = $this->baseDirectory . '/.env.example';
+        $envExampleFile = $this->baseDirectory . '/env.example';
         $envExists = file_exists($envFile);
 
-        $writer = new DotEnvEditor($envExists ? '.env' : '.env.example');
-        $writer->write($credentials);
+        (new DotEnvEditor)
+            ->write($credentials, $this->envFileName());
 
         if ( ! $envExists) {
-            // rename .env.example to .env
+            // rename env.example to .env
             rename($envExampleFile, $envFile);
         }
     }
@@ -260,6 +291,33 @@ class Installer
             'app_debug' => false,
             'installed' => true,
         ]);
+    }
+
+    protected function createHtaccessFiles($force = false, $alternative = false) {
+        $rootHtaccess = "{$this->baseDirectory}/.htaccess";
+        $rootHtaccessStub = "{$this->baseDirectory}/htaccess.example";
+        $publicHtaccess = "{$this->baseDirectory}/public/.htaccess";
+        $publicHtaccessStub = "{$this->baseDirectory}/public/htaccess.example";
+        $parts = parse_url($this->getBaseUrl());
+
+        if ( ! file_exists($rootHtaccess) || $force) {
+            $contents = file_get_contents($rootHtaccessStub);
+            if ($alternative) {
+                $path = isset($parts['path']) ? $parts['path'] : '/';
+                $contents = str_replace('# RewriteBase /', "RewriteBase $path", $contents);
+            }
+            file_put_contents($rootHtaccess, $contents);
+        }
+
+        if ( ! file_exists($publicHtaccess) || $force) {
+            $contents = file_get_contents($publicHtaccessStub);
+            if ($alternative) {
+                $path = isset($parts['path']) ? $parts['path'] : '';
+                $contents = str_replace('index.php', "{$path}/index.php", $contents);
+                $contents = str_replace('# RewriteBase /', "RewriteBase $path", $contents);
+            }
+            file_put_contents($publicHtaccess, $contents);
+        }
     }
 
     private function deleteInstallationFiles()
@@ -280,9 +338,9 @@ class Installer
         @rmdir($dir);
     }
 
-    public function cleanLog()
+    public function startNewLogSection()
     {
-        file_put_contents($this->logFile, '"========================== INSTALLATION LOG ========================"');
+        file_put_contents($this->logFile, '"========================== INSTALLATION LOG SECTION ========================"', PHP_EOL, FILE_APPEND);
     }
 
     public function logPost()
@@ -313,14 +371,19 @@ class Installer
         if (is_array($message)) $message = implode(PHP_EOL, $message);
 
         $message = "[" . date("Y/m/d h:i:s", time()) . "] " . vsprintf($message, $args) . PHP_EOL;
-        file_put_contents($this->logFile, $message, FILE_APPEND);
+
+        try {
+            file_put_contents($this->logFile, $message, FILE_APPEND);
+        } catch (\Exception $e) {
+            //
+        }
     }
 
     protected function bootFramework()
     {
-        $autoloadFile = $this->baseDirectory . '/bootstrap/autoload.php';
+        $autoloadFile = $this->baseDirectory . '/vendor/autoload.php';
         if (!file_exists($autoloadFile)) {
-            throw new Exception('Unable to find autoloader: ~/bootstrap/autoload.php');
+            throw new Exception('Unable to find autoloader: ~/vendor/autoload.php');
         }
         require $autoloadFile;
 
@@ -328,6 +391,7 @@ class Installer
         if (!file_exists($appFile)) {
             throw new Exception('Unable to find app loader: ~/bootstrap/app.php');
         }
+        /** @var Application $app */
         $app = require_once $appFile;
         $kernel = $app->make('Illuminate\Contracts\Console\Kernel');
         $kernel->bootstrap();
@@ -344,7 +408,7 @@ class Installer
         return $default;
     }
 
-    public function getBaseUrl()
+    public function getBaseUrl($suffix = null)
     {
         if (isset($_SERVER['HTTP_HOST'])) {
             $baseUrl = !empty($_SERVER['HTTPS']) && strtolower($_SERVER['HTTPS']) !== 'off' ? 'https' : 'http';
@@ -357,12 +421,18 @@ class Installer
         $baseUrl = rtrim($baseUrl, '/');
         $baseUrl = preg_replace('/\/public$/', '', $baseUrl);
         $baseUrl = str_replace('install_files', '', $baseUrl);
+        $baseUrl = trim($baseUrl);
 
-        return trim($baseUrl);
+        return $suffix ? "$baseUrl/$suffix" : $baseUrl;
     }
 
     public function e($value)
     {
         return htmlentities($value, ENT_QUOTES, 'UTF-8', false);
+    }
+
+    private function envFileName()
+    {
+        return file_exists("$this->baseDirectory/.env") ? '.env' : 'env.example';
     }
 }

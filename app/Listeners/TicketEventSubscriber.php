@@ -2,19 +2,16 @@
 
 use App\Events\TicketCreated;
 use App\Events\TicketUpdated;
-use App\Mail\TicketCreatedNotification;
+use App\Services\Triggers\TriggersCycle;
 use App\Ticket;
 use Common\Settings\Settings;
-use App\Services\Triggers\TriggersCycle;
-use Illuminate\Mail\Mailer;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Events\Dispatcher;
+use Illuminate\Mail\Mailer;
 
 class TicketEventSubscriber implements ShouldQueue
 {
     /**
-     * TriggersCycle instance.
-     *
      * @var TriggersCycle
      */
     private $triggersCycle;
@@ -41,23 +38,19 @@ class TicketEventSubscriber implements ShouldQueue
     }
 
     /**
-     * Handle ticket created event.
-     *
      * @param TicketCreated $event
      */
     public function onTicketCreated(TicketCreated $event)
     {
-        $ticket = app(Ticket::class)->find($event->ticketId);
+        $ticket = app(Ticket::class)->find($event->ticket->id);
         $this->triggersCycle->runAgainstTicket($ticket);
 
         if ($this->settings->get('tickets.send_ticket_created_notification')) {
-            $this->mailer->queue(new TicketCreatedNotification($ticket));
+            $ticket->user->notify(new \App\Notifications\TicketReceived($ticket));
         }
     }
 
     /**
-     * Handle ticket updated event.
-     *
      * @param TicketUpdated $event
      */
     public function onTicketUpdated(TicketUpdated $event)
@@ -66,8 +59,6 @@ class TicketEventSubscriber implements ShouldQueue
     }
 
     /**
-     * Register the listeners for the subscriber.
-     *
      * @param Dispatcher $events
      */
     public function subscribe($events)

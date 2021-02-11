@@ -3,9 +3,9 @@
 use App\Services\Ticketing\ReplyRepository;
 use App\Services\Ticketing\TicketRepository;
 use App\Events\TicketUpdated;
-use Common\Core\Controller;
+use Common\Core\BaseController;
 
-class DraftsController extends Controller
+class DraftsController extends BaseController
 {
     /**
      * @var ReplyRepository

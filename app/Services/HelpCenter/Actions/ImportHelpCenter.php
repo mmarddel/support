@@ -5,11 +5,12 @@ namespace App\Services\HelpCenter\Actions;
 use App\Article;
 use App\Category;
 use App\Tag;
-use Artisan;
+use Cache;
 use Common\Files\FileEntry;
 use DB;
 use Exception;
-use Illuminate\Support\Arr;
+use Arr;
+use Str;
 use Storage;
 use ZipArchive;
 
@@ -54,7 +55,7 @@ class ImportHelpCenter
         // store help center images
         for ($i = 0; $i < $zip->numFiles; $i++){
             $stat = $zip->statIndex( $i );
-            if (starts_with(dirname($stat['name']), 'images/')) {
+            if (Str::startsWith(dirname($stat['name']), 'images/')) {
                 list($root, $folder, $name) = explode('/', $stat['name']);
                 Storage::disk('public')->put("$folder/$name", $zip->getFromIndex($stat['index']));
             }
@@ -104,6 +105,6 @@ class ImportHelpCenter
             });
         });
 
-        Artisan::call('cache:clear', ['--force']);
+        Cache::flush();
     }
 }

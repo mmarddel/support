@@ -28,9 +28,10 @@ class DeleteTicketAction implements TriggerActionInterface {
      *
      * @param Ticket $ticket
      * @param Action $action
+     * @param \App\Trigger $trigger
      * @return Ticket
      */
-    public function perform(Ticket $ticket, Action $action)
+    public function perform(Ticket $ticket, Action $action, \App\Trigger $trigger)
     {
         $this->ticketRepository->deleteTickets([$ticket->id]);
 

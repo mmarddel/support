@@ -1,10 +1,12 @@
 <?php namespace Common\Localizations;
 
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Common\Core\Controller;
+use Common\Core\BaseController;
+use Illuminate\Http\Response;
 use Illuminate\Support\Collection;
 
-class LocalizationsController extends Controller
+class LocalizationsController extends BaseController
 {
     /**
      * @var Request
@@ -17,8 +19,6 @@ class LocalizationsController extends Controller
     private $repository;
 
     /**
-     * LocalizationsController constructor.
-     *
      * @param Request $request
      * @param LocalizationsRepository $repository
      */
@@ -31,7 +31,7 @@ class LocalizationsController extends Controller
     /**
      * Return all user created localizations.
      *
-     * @return \Illuminate\Http\JsonResponse|\Illuminate\Http\Response
+     * @return JsonResponse|Response
      */
     public function index()
     {
@@ -44,20 +44,18 @@ class LocalizationsController extends Controller
      * Get localization by specified name.
      *
      * @param string $name
-     * @return \Illuminate\Http\JsonResponse|\Illuminate\Http\Response
+     * @return JsonResponse|Response
      */
     public function show($name)
     {
         $this->authorize('show', Localization::class);
 
-        return $this->success(['localization' => $this->repository->getByName($name)]);
+        return $this->success(['localization' => $this->repository->getByNameOrCode($name)]);
     }
 
     /**
-     * Update specified localization.
-     *
      * @param integer $id
-     * @return \Illuminate\Http\JsonResponse|\Illuminate\Http\Response
+     * @return JsonResponse|Response
      */
     public function update($id)
     {
@@ -65,27 +63,27 @@ class LocalizationsController extends Controller
 
         $this->validate($this->request, [
             'name'  => 'string|min:1',
+            'language' => 'string|min:2|max:5',
             'lines' => 'array|min:1'
         ]);
 
-        $localization = $this->repository->update($id, $this->request->all());
+        $localization = $this->repository->update($id, $this->request->all(), true);
         return $this->success(['localization' => $localization]);
     }
 
     /**
-     * Create a new localization
-     *
-     * @return \Illuminate\Http\JsonResponse|\Illuminate\Http\Response
+     * @return JsonResponse|Response
      */
     public function store()
     {
         $this->authorize('store', Localization::class);
 
         $this->validate($this->request, [
-            'name' => 'required|unique:localizations'
+            'name' => 'required|unique:localizations',
+            'language' => 'string|min:2|max:5',
         ]);
 
-        $localization = $this->repository->create($this->request->get('name'));
+        $localization = $this->repository->create($this->request->all());
         return $this->success(['localization' => $localization]);
     }
 
@@ -93,7 +91,7 @@ class LocalizationsController extends Controller
      * Delete specified language.
      *
      * @param int $id
-     * @return \Illuminate\Http\JsonResponse
+     * @return JsonResponse
      */
     public function destroy($id)
     {

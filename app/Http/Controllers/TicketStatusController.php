@@ -1,29 +1,24 @@
 <?php namespace App\Http\Controllers;
 
 use App\Ticket;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use App\Services\Ticketing\TicketRepository;
-use Common\Core\Controller;
+use Common\Core\BaseController;
 
-class TicketStatusController extends Controller
+class TicketStatusController extends BaseController
 {
     /**
-     * TicketRepository model instance.
-     *
      * @var TicketRepository
      */
     private $tickets;
 
     /**
-     * Laravel request instance.
-     *
      * @var Request
      */
     private $request;
 
     /**
-     * TicketStatusController constructor.
-     *
      * @param TicketRepository $tickets
      * @param Request          $request
      */
@@ -36,12 +31,10 @@ class TicketStatusController extends Controller
     /**
      * Change status of multiple tickets.
      *
-     * @return \Illuminate\Http\JsonResponse
+     * @return JsonResponse
      */
     public function change()
     {
-        $this->authorize('update', Ticket::class);
-
         $this->validate($this->request, [
             'ids'    => 'required|array',
             'status' => 'required|string|in:open,closed,pending,spam'
@@ -49,6 +42,10 @@ class TicketStatusController extends Controller
 
         $ids    = $this->request->input('ids');
         $status = $this->request->input('status');
+
+        $tickets = app(Ticket::class)->whereIn('id', $ids)->get();
+
+        $this->authorize('update', [new Ticket(), $tickets]);
 
         $this->tickets->changeStatus($ids, $status);
 

@@ -3,6 +3,8 @@
 use Illuminate\Database\Eloquent\Model;
 
 /**
+ * App\UserDetails
+ *
  * @property integer $id
  * @property string $name
  * @property string $value
@@ -13,6 +15,10 @@ use Illuminate\Database\Eloquent\Model;
  * @property string $notes
  * @property int $user_id
  * @property-read \App\User $user
+ * @method static \Illuminate\Database\Eloquent\Builder|\App\UserDetails whereDetails($value)
+ * @method static \Illuminate\Database\Eloquent\Builder|\App\UserDetails whereId($value)
+ * @method static \Illuminate\Database\Eloquent\Builder|\App\UserDetails whereNotes($value)
+ * @method static \Illuminate\Database\Eloquent\Builder|\App\UserDetails whereUserId($value)
  */
 class UserDetails extends Model {
 

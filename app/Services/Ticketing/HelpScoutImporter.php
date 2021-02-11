@@ -1,5 +1,6 @@
 <?php namespace App\Services\Ticketing;
 
+use App\Tag;
 use App\User;
 use Carbon\Carbon;
 use Common\Auth\UserRepository;
@@ -201,7 +202,7 @@ class HelpScoutImporter
      */
     private function createTags($names)
     {
-        return $this->tagRepository->getByNamesOrCreate($names, 'category')->pluck('id')->toArray();
+        return app(Tag::class)->insertOrRetrieve($names, 'category')->pluck('id')->toArray();
     }
 
     /**
@@ -305,7 +306,7 @@ class HelpScoutImporter
         }
 
         //get avatar, unless it's a gravatar url
-        if ($profile['photoUrl'] && ! str_contains($profile['photoUrl'], 'gravatar')) {
+        if ($profile['photoUrl'] && ! \Str::contains($profile['photoUrl'], 'gravatar')) {
             $avatar = $profile['photoUrl'];
         }
 

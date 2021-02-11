@@ -1,16 +1,18 @@
 <?php namespace App\Http\Controllers;
 
+use App\Services\Reports\HelpCenterReport;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use App\Services\Reports\TicketsReport;
-use App\Services\Reports\EnvatoReports;
-use Common\Core\Controller;
+use App\Services\Reports\EnvatoReport;
+use Common\Core\BaseController;
 
-class ReportsController extends Controller
+class ReportsController extends BaseController
 {
     /**
      * EnvatoReports service instance.
      *
-     * @var EnvatoReports
+     * @var EnvatoReport
      */
     private $envato;
 
@@ -32,20 +34,37 @@ class ReportsController extends Controller
      * ReportsController constructor.
      *
      * @param Request $request
-     * @param EnvatoReports $envato
+     * @param EnvatoReport $envato
      * @param TicketsReport $ticketReports
      */
-    public function __construct(Request $request, EnvatoReports $envato, TicketsReport $ticketReports)
+    public function __construct(Request $request, EnvatoReport $envato, TicketsReport $ticketReports)
     {
         $this->envato = $envato;
         $this->request = $request;
         $this->ticketReports = $ticketReports;
     }
 
+    public function helpCenterReport()
+    {
+        $this->authorize('index', 'ReportPolicy');
+
+        $report = app(HelpCenterReport::class)->generate();
+
+        return $this->success(['report' => $report]);
+    }
+
+    public function userSearches($userId)
+    {
+        $this->authorize('index', 'ReportPolicy');
+
+        $report = app(HelpCenterReport::class)
+            ->generateSearchReport(['user_id' => $userId], 'last_seen', 'desc');
+
+        return $this->success(['report' => $report]);
+    }
+
     /**
-     * Get envato earnings report.
-     *
-     * @return \Illuminate\Http\JsonResponse
+     * @return JsonResponse
      */
     public function envatoEarnings()
     {

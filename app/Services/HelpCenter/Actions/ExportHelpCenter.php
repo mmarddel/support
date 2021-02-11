@@ -4,6 +4,7 @@ namespace App\Services\HelpCenter\Actions;
 
 use App\Article;
 use App\Category;
+use File;
 use Illuminate\Filesystem\Filesystem;
 use Illuminate\Support\Collection;
 use ZipArchive;
@@ -45,13 +46,13 @@ class ExportHelpCenter
     private function exportAsHtml(Collection $categories)
     {
         $categories->each(function(Category $parentCategory) {
-            $prefix = str_slug($parentCategory->name);
+            $prefix = slugify($parentCategory->name);
 
             // styles
-            $styles = app(Filesystem::class)->files(resource_path('views/help-center/styles'));
-            foreach ($styles as $stylePath) {
-                $baseName = basename($stylePath);
-                $this->zip->addFromString("$prefix/assets/styles/$baseName", app(Filesystem::class)->get($stylePath));
+            $styles = File::files(resource_path('views/help-center/styles'));
+            foreach ($styles as $fileInfo) {
+                $baseName = $fileInfo->getBasename();
+                $this->zip->addFromString("$prefix/assets/styles/$baseName", $fileInfo->getContents());
             }
 
             // scripts
@@ -69,7 +70,7 @@ class ExportHelpCenter
                     // replace image urls with relative local path
                     $article->body = app(ReplaceArticleImageSrc::class)->execute(
                         $article->body,
-                        'https://support.vebto.com/storage',
+                        'storage',
                         '../../assets/images'
                     );
 
@@ -79,8 +80,8 @@ class ExportHelpCenter
                         'article' => $article
                     ])->render();
 
-                    $articleName = str_slug($article->title);
-                    $categoryName = str_slug($childCategory->name);
+                    $articleName = slugify($article->title);
+                    $categoryName = slugify($childCategory->name);
                     $articlePath = "articles/$categoryName/$articleName.html";
                     $this->zip->addFromString("$prefix/$articlePath", $renderedArticle);
 

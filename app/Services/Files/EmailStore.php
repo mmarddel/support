@@ -5,6 +5,7 @@ use App\Services\Mail\ParsedEmail;
 use Carbon\Carbon;
 use Illuminate\Filesystem\FilesystemAdapter;
 use Illuminate\Filesystem\FilesystemManager;
+use Illuminate\Support\Str;
 
 class EmailStore {
 
@@ -82,7 +83,7 @@ class EmailStore {
     private function makeUnmatchedEmailPath()
     {
         $date = Carbon::now();
-        $name = "{$date->hour}:{$date->minute}".str_random(30);
+        $name = "{$date->hour}:{$date->minute}" . Str::random(30);
         return "emails/unmatched/{$date->year}/{$date->month}/{$date->day}/{$name}.json";
     }
 

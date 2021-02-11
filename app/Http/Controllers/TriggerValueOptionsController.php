@@ -2,9 +2,9 @@
 
 use App\Trigger;
 use App\Services\Triggers\ValueOptions\ValueOptions;
-use Common\Core\Controller;
+use Common\Core\BaseController;
 
-class TriggerValueOptionsController extends Controller
+class TriggerValueOptionsController extends BaseController
 {
 
     /**

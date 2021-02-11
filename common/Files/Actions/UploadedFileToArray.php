@@ -5,6 +5,7 @@ namespace Common\Files\Actions;
 use Common\Files\FileEntry;
 use Common\Files\Traits\GetsEntryTypeFromMime;
 use Illuminate\Http\UploadedFile;
+use Str;
 
 class UploadedFileToArray
 {
@@ -36,16 +37,31 @@ class UploadedFileToArray
             $originalMime = $file->getClientMimeType();
         }
 
-        $data = [
+        if ($originalMime === 'text/plain' && $file->getClientOriginalExtension() === 'csv') {
+            $type = 'spreadsheet';
+        }
+
+        if ($originalMime === 'image/svg') {
+            $originalMime = 'image/svg+xml';
+        }
+
+        if (Str::startsWith($originalMime, 'message/rfc')) {
+            $originalMime = 'text/plain';
+        }
+
+        // TODO: have a list of supported image types and check against those
+        if ($originalMime === 'image/vnd.dwg') {
+            $originalMime = 'file';
+        }
+
+        return [
             'name' => $file->getClientOriginalName(),
-            'file_name' => str_random(40),
+            'file_name' => Str::random(40),
             'mime' => $originalMime,
-            'type' => $this->getTypeFromMime($originalMime),
-            'file_size' => $file->getClientSize(),
+            'type' => isset($type) ? $type : $this->getTypeFromMime($originalMime),
+            'file_size' => $file->getSize(),
             'extension' => $this->getExtension($file, $originalMime),
         ];
-
-        return $data;
     }
 
     /**

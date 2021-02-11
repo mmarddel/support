@@ -2,13 +2,13 @@
 
 use File;
 use Image;
-use Common\Core\Controller;
+use Common\Core\BaseController;
 use Common\Settings\Setting;
 use Illuminate\Http\Request;
 use Common\Settings\Settings;
 use Illuminate\Http\JsonResponse;
 
-class UploadFaviconController extends Controller
+class UploadFaviconController extends BaseController
 {
     /**
      * @var Request

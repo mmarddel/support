@@ -2,6 +2,7 @@
 
 use App\Action;
 use App\Ticket;
+use App\Trigger;
 
 interface TriggerActionInterface {
 
@@ -10,7 +11,8 @@ interface TriggerActionInterface {
      *
      * @param Ticket $ticket
      * @param Action $action
+     * @param Trigger $trigger
      * @return Ticket
      */
-    public function perform(Ticket $ticket, Action $action);
+    public function perform(Ticket $ticket, Action $action, Trigger $trigger);
 }

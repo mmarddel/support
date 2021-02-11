@@ -1,16 +1,15 @@
 <?php namespace App\Http\Controllers;
 
+use App\Category;
 use App\Http\Requests\ModifyCategories;
 use App\User;
 use Auth;
-use App\Category;
-use Illuminate\Database\Eloquent\Collection;
+use Common\Core\BaseController;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\JsonResponse;
-use Common\Core\Controller;
 use Symfony\Component\HttpFoundation\Response;
 
-class CategoryController extends Controller {
+class CategoryController extends BaseController {
 
 	/**
 	 * @var Request
@@ -27,10 +26,6 @@ class CategoryController extends Controller {
 	 */
 	private $user;
 
-    /**
-     * @param Request $request
-     * @param Category $category
-     */
 	public function __construct(Request $request, Category $category)
 	{
 		$this->request  = $request;
@@ -38,11 +33,6 @@ class CategoryController extends Controller {
 		$this->user     = Auth::user();
 	}
 
-    /**
-     * Return all help center categories current user has access to.
-     *
-     * @return \Illuminate\Http\JsonResponse
-*/
 	public function index()
 	{
 	    $this->authorize('index', Category::class);
@@ -67,11 +57,7 @@ class CategoryController extends Controller {
 		return $this->success(['categories' => $categories]);
 	}
 
-    /**
-     * @param int $id
-     * @return \Illuminate\Http\JsonResponse
-     */
-    public function show($id)
+    public function show(int $id)
     {
         $this->authorize('show', Category::class);
 
@@ -80,12 +66,6 @@ class CategoryController extends Controller {
         return $this->success(['category' => $category]);
     }
 
-    /**
-     * Create new help center category.
-     *
-     * @param ModifyCategories $request
-     * @return Response
-     */
 	public function store(ModifyCategories $request)
 	{
 		$this->authorize('store', Category::class);
@@ -99,18 +79,12 @@ class CategoryController extends Controller {
 			'position'    => $last ? $last->position + 1 : 1,
 		]);
 
+        cache()->forget(HelpCenterController::HC_HOME_CACHE_KEY);
+
 		return response($category, 201);
 	}
 
-    /**
-     * Update specified help center category.
-     *
-     * @param integer $id
-     * @param ModifyCategories $request
-     *
-     * @return Category
-     */
-	public function update($id, ModifyCategories $request)
+	public function update(int $id, ModifyCategories $request)
 	{
 		$this->authorize('update', Category::class);
 
@@ -118,16 +92,12 @@ class CategoryController extends Controller {
 
 		$category->fill($this->request->all())->save();
 
+        cache()->forget(HelpCenterController::HC_HOME_CACHE_KEY);
+
 		return $category;
 	}
 
-	/**
-	 * Delete specified help center category and detach all folders attached to it.
-	 *
-	 * @param integer $id
-	 * @return JsonResponse
-	 */
-	public function destroy($id)
+	public function destroy(int $id)
 	{
         $this->authorize('destroy', Category::class);
 
@@ -135,6 +105,8 @@ class CategoryController extends Controller {
 
 		$category->where('parent_id', $category->id)->update(['parent_id' => null]);
 		$category->delete();
+
+        cache()->forget(HelpCenterController::HC_HOME_CACHE_KEY);
 
 		return $this->success(['data' => $category->id], 204);
 	}

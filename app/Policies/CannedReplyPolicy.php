@@ -2,12 +2,11 @@
 
 use App\User;
 use App\CannedReply;
+use Common\Core\Policies\BasePolicy;
 use Illuminate\Auth\Access\HandlesAuthorization;
 
-class CannedReplyPolicy
+class CannedReplyPolicy extends BasePolicy
 {
-    use HandlesAuthorization;
-
     public function index(User $user) {
         return $user->hasPermission('canned_replies.view');
     }

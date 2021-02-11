@@ -1,6 +1,7 @@
 <?php
 
 use App\User;
+use Common\Auth\Permissions\Permission;
 use Common\Auth\Roles\Role;
 use Faker\Generator as Faker;
 use Illuminate\Database\Seeder;
@@ -30,7 +31,6 @@ class DemoUserSeeder extends Seeder
     private $role;
 
     /**
-     * DemoSeeder constructor.
      * @param User $user
      * @param Role $role
      * @param Filesystem $fs
@@ -63,19 +63,25 @@ class DemoUserSeeder extends Seeder
     {
         $password = Hash::make('demo');
 
-        $this->user->insert([
-            ['email' => 'admin@demo.com', 'permissions' => '{"superAdmin": 1, "admin": 1}', 'password' => $password, 'first_name' => $this->faker->firstName, 'last_name' => $this->faker->lastName],
-            ['email' => 'agent@demo.com', 'permissions' => '', 'password' => $password, 'first_name' => $this->faker->firstName, 'last_name' => $this->faker->lastName]
+        $adminUser = $this->user->create([
+            'email' => 'admin@demo.com',
+            'password' => $password,
+            'first_name' => $this->faker->firstName,
+            'last_name' => $this->faker->lastName
         ]);
+        $adminUser->permissions()->sync([Permission::where('name', 'admin')->first()->id]);
 
+        $agentUser = $this->user->create([
+            'email' => 'agent@demo.com',
+            'password' => $password,
+            'first_name' => $this->faker->firstName,
+            'last_name' => $this->faker->lastName
+        ]);
         $agentGroup = $this->role->where('name', 'agents')->first();
-        $agentUser = $this->user->where('email', 'agent@demo.com')->first();
         $agentUser->roles()->attach($agentGroup->id);
     }
 
     /**
-     * Seed example customers for demo site.
-     *
      * @return Collection
      */
     private function seedDemoCustomers()
@@ -85,12 +91,10 @@ class DemoUserSeeder extends Seeder
 
         for ($i = 0; $i <= 30; $i++) {
             $email = $i === 0 ? 'customer@demo.com' : $this->faker->email;
-
             $users->push([
                 'email' => $email,
                 'first_name' => $this->faker->firstName,
                 'last_name' => $this->faker->lastName,
-                'avatar' => str_replace('http://', 'https://', $this->faker->imageUrl(64, 64)),
                 'password' => $password,
             ]);
         }
@@ -101,8 +105,6 @@ class DemoUserSeeder extends Seeder
     }
 
     /**
-     * Attach customer role to example users.
-     *
      * @param Collection $userIds
      */
     private function attachCustomerGroupToUsers($userIds)

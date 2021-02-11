@@ -9,6 +9,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\belongsToMany;
 
 /**
+ * App\CannedReply
+ *
  * @property integer $id
  * @property string $name
  * @property string $body
@@ -18,6 +20,18 @@ use Illuminate\Database\Eloquent\Relations\belongsToMany;
  * @property-read Collection|FileEntry[] $uploads
  * @property-read User $user
  * @mixin Eloquent
+ * @property bool $shared
+ * @method static \Illuminate\Database\Eloquent\Builder|\App\CannedReply whereBody($value)
+ * @method static \Illuminate\Database\Eloquent\Builder|\App\CannedReply whereCreatedAt($value)
+ * @method static \Illuminate\Database\Eloquent\Builder|\App\CannedReply whereId($value)
+ * @method static \Illuminate\Database\Eloquent\Builder|\App\CannedReply whereName($value)
+ * @method static \Illuminate\Database\Eloquent\Builder|\App\CannedReply whereShared($value)
+ * @method static \Illuminate\Database\Eloquent\Builder|\App\CannedReply whereUpdatedAt($value)
+ * @method static \Illuminate\Database\Eloquent\Builder|\App\CannedReply whereUserId($value)
+ * @property-read int|null $uploads_count
+ * @method static \Illuminate\Database\Eloquent\Builder|\App\CannedReply newModelQuery()
+ * @method static \Illuminate\Database\Eloquent\Builder|\App\CannedReply newQuery()
+ * @method static \Illuminate\Database\Eloquent\Builder|\App\CannedReply query()
  */
 class CannedReply extends Model
 {

@@ -1,9 +1,12 @@
 <?php namespace Common\Admin\Appearance;
 
+use Common\Admin\Appearance\Events\AppearanceSettingSaved;
 use Common\Settings\DotEnvEditor;
 use Common\Settings\Settings;
+use File;
 use Illuminate\Filesystem\Filesystem;
 use Illuminate\Filesystem\FilesystemManager;
+use Str;
 
 class AppearanceSaver
 {
@@ -23,7 +26,10 @@ class AppearanceSaver
     const THEME_VALUES_PATH = 'appearance/theme-values.json';
 
     const CUSTOM_CSS_PATH = 'custom-code/custom-styles.css';
-    const CUSTOM_JS_PATH = 'custom-code/custom-scripts.js';
+    const CUSTOM_HTML_PATH = 'custom-code/custom-html.html';
+
+    const BASIC_SETTING = 'BASIC';
+    const ENV_SETTING = 'ENV';
 
     /**
      * Local filesystem instance.
@@ -45,8 +51,6 @@ class AppearanceSaver
     private $envEditor;
 
     /**
-     * AppearanceManager constructor.
-     *
      * @param Filesystem $fs
      * @param Settings $settings
      * @param FilesystemManager $storage
@@ -66,8 +70,6 @@ class AppearanceSaver
     }
 
     /**
-     * Save user modifications to site appearance.
-     *
      * @param array $params
      */
     public function save($params)
@@ -75,11 +77,11 @@ class AppearanceSaver
         foreach ($params as $key => $value) {
             if ($key === 'colors') {
                 $this->saveTheme($value);
-            } else if (starts_with($key, 'env.')) {
+            } else if (Str::startsWith($key, 'env.')) {
                 $this->saveEnvSetting($key, $value);
-            } else if ($key === 'custom_code.css' || $key === 'custom_code.js') {
+            } else if (Str::startsWith($key, 'custom-code.')) {
                 $this->saveCustomCode($key, $value);
-            } else if (is_string($value) && str_contains($value, 'branding-images')) {
+            } else if (is_string($value) && \Str::contains($value, 'branding-images')) {
                 $this->saveImageSetting($key, $value);
             } else {
                 $this->saveBasicSetting($key, $value);
@@ -113,10 +115,13 @@ class AppearanceSaver
     private function saveEnvSetting($key, $value)
     {
         $key = str_replace('env.', '', $key);
+        $previousValue = env(strtoupper($key));
 
         $this->envEditor->write([
             $key => $value
         ]);
+
+        event(new AppearanceSettingSaved(self::ENV_SETTING, $key, $value, $previousValue));
     }
 
     /**
@@ -128,9 +133,11 @@ class AppearanceSaver
     private function saveBasicSetting($key, $value)
     {
         $value = is_array($value) ? json_encode($value) : $value;
+        $previousValue = $this->settings->get($key);
 
-        if ($this->settings->get($key) !== $value) {
+        if ($previousValue !== $value) {
             $this->settings->save([$key => $value]);
+            event(new AppearanceSettingSaved(self::BASIC_SETTING, $key, $value, $previousValue));
         }
     }
 
@@ -147,17 +154,14 @@ class AppearanceSaver
 
     public function saveCustomCode($key, $value)
     {
-        if ($key === 'custom_code.css') {
-            $path = self::CUSTOM_CSS_PATH;
-            $loadKey = 'custom_code.load_css';
-        } else {
-            $path = self::CUSTOM_JS_PATH;
-            $loadKey = 'custom_code.load_js';
+        $path = $key === 'custom-code.css' ?
+            self::CUSTOM_CSS_PATH :
+            self::CUSTOM_HTML_PATH;
+
+        if ( ! File::exists(public_path('storage/custom-code'))) {
+            File::makeDirectory(public_path('storage/custom-code'));
         }
 
-        //make sure to update load setting for css and js, so we don't load empty files
-        $this->settings->save([$loadKey => !!$value]);
-
-        return $this->storage->disk('public')->put($path, $value);
+        return File::put(public_path("storage/$path"), trim($value));
     }
 }

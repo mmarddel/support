@@ -3,7 +3,7 @@
 namespace Common\Files\Traits;
 
 use DB;
-use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Database\Eloquent\Builder;
 
 trait HandlesEntryPaths
 {
@@ -47,16 +47,16 @@ trait HandlesEntryPaths
             ->update(['path' => DB::raw("REPLACE(path, '$oldPath', '$newPath')")]);
     }
 
-    /**
-     * Get all children of current entry.
-     *
-     * @return Collection
-     */
-    public function findChildren()
+    public function scopeAllChildren(Builder $builder): Builder
     {
-        if ( ! $this->exists) return collect();
+        return $builder->where('path', 'like', $this->attributes['path'].'%');
+    }
 
-        return $this->where('path', 'like', $this->attributes['path'].'%')->get();
+    public function scopeAllParents(Builder $builder): Builder
+    {
+        $folderIds = explode('/', $this->path);
+        array_pop($folderIds);
+        return $builder->whereIn('id', $folderIds);
     }
 
     /**

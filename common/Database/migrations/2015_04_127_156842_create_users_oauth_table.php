@@ -12,6 +12,8 @@ class CreateUsersOauthTable extends Migration {
 	 */
 	public function up()
 	{
+        if (Schema::hasTable('users_oauth')) return;
+
 		Schema::create('users_oauth', function(Blueprint $table)
 		{
 			$table->increments('id');

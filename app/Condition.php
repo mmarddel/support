@@ -19,6 +19,11 @@ use Illuminate\Database\Eloquent\Model;
  * @mixin \Eloquent
  * @property string $type
  * @method static \Illuminate\Database\Query\Builder|\App\Condition whereType($value)
+ * @property-read array $input_config
+ * @property-read int|null $operators_count
+ * @method static \Illuminate\Database\Eloquent\Builder|\App\Condition newModelQuery()
+ * @method static \Illuminate\Database\Eloquent\Builder|\App\Condition newQuery()
+ * @method static \Illuminate\Database\Eloquent\Builder|\App\Condition query()
  */
 class Condition extends Model
 {
@@ -34,5 +39,14 @@ class Condition extends Model
     public function operators()
     {
         return $this->belongsToMany(Operator::class);
+    }
+
+    /**
+     * @param string $value
+     * @return array
+     */
+    public function getInputConfigAttribute($value)
+    {
+        return json_decode($value);
     }
 }

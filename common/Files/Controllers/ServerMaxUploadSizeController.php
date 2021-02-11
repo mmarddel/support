@@ -2,10 +2,12 @@
 
 namespace Common\Files\Controllers;
 
+use Common\Core\BaseController;
+use Common\Files\Actions\GetServerMaxUploadSize;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Common\Core\Controller;
 
-class ServerMaxUploadSizeController extends Controller
+class ServerMaxUploadSizeController extends BaseController
 {
     /**
      * @var Request
@@ -18,21 +20,16 @@ class ServerMaxUploadSizeController extends Controller
     public function __construct(Request $request)
     {
         $this->request = $request;
+        $this->middleware('isAdmin');
     }
 
     /**
-     * Restore specified soft delete entries.
-     *
-     * @return \Illuminate\Http\JsonResponse
+     * @return JsonResponse
      */
     public function index()
     {
-        if ( ! $this->request->user()->hasPermission('admin')) {
-            abort(403);
-        }
-
         return $this->success([
-            'maxSize' => max(ini_get('post_max_size'), ini_get('upload_max_filesize'))
+            'maxSize' => app(GetServerMaxUploadSize::class)->execute()['original'],
         ]);
     }
 }

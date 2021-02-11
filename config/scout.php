@@ -60,7 +60,7 @@ return [
     ],
 
     'tntsearch' => [
-        'storage'  => storage_path(),
+        'storage'  => storage_path('tntsearch'),
         'fuzziness' => env('TNTSEARCH_FUZZINESS', false),
         'fuzzy' => [
             'prefix_length' => 2,
@@ -69,5 +69,4 @@ return [
         ],
         'asYouType' => false,
     ],
-
 ];

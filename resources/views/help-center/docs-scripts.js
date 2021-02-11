@@ -1,6 +1,6 @@
 setTimeout(function() {
     // article content
-    var regExp = /<h2 id="(.*?)">(.*?)<\/h2>/g;
+    var regExp = /<(h[2|3]) id=".*?">(.*?)<\/h[2|3]>/g;
     var body = document.querySelector('.article-body').innerHTML;
     var content = document.querySelector('.article-content');
     var match = regExp.exec(body);

@@ -24,6 +24,9 @@ use Illuminate\Database\Eloquent\Model;
  * @method static \Illuminate\Database\Query\Builder|\App\ArticleFeedback whereUpdatedAt($value)
  * @mixin \Eloquent
  * @property int $article_id
+ * @method static \Illuminate\Database\Eloquent\Builder|\App\ArticleFeedback newModelQuery()
+ * @method static \Illuminate\Database\Eloquent\Builder|\App\ArticleFeedback newQuery()
+ * @method static \Illuminate\Database\Eloquent\Builder|\App\ArticleFeedback query()
  */
 class ArticleFeedback extends Model
 {

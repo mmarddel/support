@@ -6,9 +6,8 @@ use Common\Auth\Events\UserCreated;
 use Common\Auth\Roles\Role;
 use Common\Auth\UserRepository as CommonUserRepository;
 use Common\Settings\Settings;
-use DB;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Support\Arr;
+use Arr;
 use Illuminate\Validation\ValidationException;
 use Validator;
 
@@ -58,10 +57,7 @@ class UserRepository extends CommonUserRepository {
                     throw new ValidationException($validator, new JsonResponse(['messages' => $validator->errors()->getMessages()], 422));
                 }
 
-                $user->updatePurchases(
-                    [['item' => $purchase, 'code' => $params['purchase_code']]],
-                    Arr::get($purchase, 'buyer')
-                );
+                $user->updatePurchases([$purchase], Arr::get($purchase, 'buyer'));
             }
 
             if ( ! isset($params['roles']) || ! $this->attachRoles($user, $params['roles'])) {
@@ -77,18 +73,5 @@ class UserRepository extends CommonUserRepository {
         event(new UserCreated($user));
 
         return $user;
-    }
-
-    /**
-     * @param array $ids
-     * @return array|bool|null
-     */
-    public function deleteMultiple($ids)
-    {
-        parent::deleteMultiple($ids);
-
-        DB::table('purchase_codes')->whereIn('user_id', $ids)->delete();
-
-        return $ids;
     }
 }

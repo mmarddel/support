@@ -3,9 +3,9 @@
 use Auth;
 use App\Category;
 use Illuminate\Http\Request;
-use Common\Core\Controller;
+use Common\Core\BaseController;
 
-class ChildCategoryController extends Controller {
+class ChildCategoryController extends BaseController {
 
 	/**
 	 * Laravel request instance.

@@ -1,20 +1,20 @@
 <?php namespace App\Services\Mail;
 
 use App;
-use App\Reply;
-use App\Services\Ticketing\TicketReplyCreator;
-Use App\Ticket;
 use App\Events\TicketCreated;
+use App\Notifications\TicketRejected;
+use App\Reply;
+use App\Services\Files\EmailStore;
 use App\Services\Ticketing\ReplyRepository;
+use App\Services\Ticketing\TicketReplyCreator;
+use App\Services\Ticketing\TicketRepository;
+use App\Ticket;
 use Common\Auth\UserRepository;
-use Common\Files\Actions\CreateFileEntry;
-use Common\Files\Actions\Storage\StorePrivateUpload;
-use Common\Files\Actions\Storage\StorePublicUpload;
+use Common\Files\Actions\UploadFile;
 use Common\Files\Traits\GetsEntryTypeFromMime;
 use Common\Settings\Settings;
-use App\Services\Ticketing\TicketRepository;
-use App\Services\Files\EmailStore;
-use App\Mail\TicketRejectedNotification;
+use Notification;
+use Str;
 use Mail;
 
 class IncomingMailHandler
@@ -22,22 +22,16 @@ class IncomingMailHandler
     use GetsEntryTypeFromMime;
 
     /**
-     * ReplyRepository instance.
-     *
      * @var ReplyRepository
      */
     private $replyRepository;
 
     /**
-     * EmailStore service instance.
-     *
      * @var EmailStore
      */
     private $emailStore;
 
     /**
-     * TicketRepository instance.
-     *
      * @var TicketRepository
      */
     private $ticketRepository;
@@ -68,8 +62,6 @@ class IncomingMailHandler
     private $referenceHash;
 
     /**
-     * IncomingMailHandler constructor.
-     *
      * @param ReplyRepository $replyRepository
      * @param TicketRepository $ticketRepository
      * @param TicketReplyCreator $ticketReplyCreator
@@ -195,7 +187,7 @@ class IncomingMailHandler
             'body'    => $this->parsedEmail->getNormalizedBody($cidMap),
             'user_id' => $ticket->user_id,
             'uploads' => $this->createUploads($ticket->user_id),
-        ], 'replies');
+        ], Reply::REPLY_TYPE);
     }
 
     /**
@@ -210,8 +202,8 @@ class IncomingMailHandler
 
         return $inlineAttachments->mapWithKeys(function($attachment) use($userId) {
             $data = $this->transformAttachmentData($attachment);
-            $fileEntry = app(CreateFileEntry::class)->execute($data, ['public_path' => 'ticket_images', 'user_id' => $userId]);
-            app(StorePublicUpload::class)->execute($fileEntry, $attachment['contents']);
+            $fileEntry = app(UploadFile::class)
+                ->execute('public', $data, ['diskPrefix' => 'ticket_images', 'userId' => $userId]);
             return [$attachment['cid'] => url($fileEntry->url)];
         })->toArray();
     }
@@ -228,8 +220,7 @@ class IncomingMailHandler
 
         $uploadIds = $attachments->map(function($attachment) use($userId) {
             $data = $this->transformAttachmentData($attachment);
-            $fileEntry = app(CreateFileEntry::class)->execute($data, ['user_id' => $userId]);
-            app(StorePrivateUpload::class)->execute($fileEntry, $attachment['contents']);
+            $fileEntry = app(UploadFile::class)->execute('private', $data, ['userId' => $userId]);
             return $fileEntry->id;
         });
 
@@ -246,11 +237,12 @@ class IncomingMailHandler
     {
         return [
             'name' => $data['original_name'],
-            'file_name' => str_random(40),
+            'file_name' => Str::random(40),
             'mime' => $data['mime_type'],
             'type' => $this->getTypeFromMime($data['mime_type']),
             'file_size' => $data['size'],
             'extension' => $data['extension'],
+            'contents' => $data['contents'],
         ];
     }
 
@@ -272,7 +264,8 @@ class IncomingMailHandler
     private function maybeSendTicketRejectedNotification()
     {
         if ( ! $this->settings->get('tickets.create_from_emails') && $this->settings->get('tickets.send_ticket_rejected_notification')) {
-            Mail::send(new TicketRejectedNotification($this->parsedEmail->getSenderEmail()));
+            Notification::route('mail', $this->parsedEmail->getSenderEmail())
+                ->notify(new TicketRejected());
         }
     }
 }

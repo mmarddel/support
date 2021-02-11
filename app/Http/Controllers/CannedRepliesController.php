@@ -6,9 +6,9 @@ use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use App\Services\CannedReplyRepository;
-use Common\Core\Controller;
+use Common\Core\BaseController;
 
-class CannedRepliesController extends Controller {
+class CannedRepliesController extends BaseController {
 
     /**
      * @var CannedReplyRepository
@@ -86,7 +86,7 @@ class CannedRepliesController extends Controller {
             'shared' => 'boolean',
             'name' => "required|string|min:3|max:255|unique:canned_replies,name,$id,id,user_id,$userId",
             'uploads'   => 'array|max:5',
-            'uploads.*' => 'string|min:10'
+            'uploads.*' => 'int|min:10'
         ]);
 
         $cannedReply = $this->repository->update($cannedReply, $this->request->all());

@@ -81,9 +81,7 @@ class DemoTicketsSeeder extends Seeder
     }
 
     /**
-     * Seed example tickets for demo site.
-     *
-     * @return \Illuminate\Database\Eloquent\Collection
+     * @return Collection
      */
     private function seedDemoTickets()
     {
@@ -94,7 +92,7 @@ class DemoTicketsSeeder extends Seeder
 
         for ($i = 0; $i <= $this->ticketCount; $i++) {
             $date = Carbon::now()->addDays(-rand(1, 30));
-            $tickets[] =  ['subject' => array_random($subjects), 'user_id' => $customers->random()->id, 'created_at' => $date, 'updated_at' => $date];
+            $tickets[] =  ['subject' => Arr::random($subjects), 'user_id' => $customers->random()->id, 'created_at' => $date, 'updated_at' => $date];
         }
 
         $this->ticket->insert($tickets);

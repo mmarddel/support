@@ -1,18 +1,25 @@
 <?php namespace Common\Billing;
 
 use Carbon\Carbon;
+use DB;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * Trait Billable
- * @property-read \Illuminate\Database\Eloquent\Collection|\Common\Billing\Subscription $subscriptions
+ * @property-read Collection|Subscription[] $subscriptions
  */
 trait Billable
 {
     public function subscribe($gateway, $gatewayId, BillingPlan $plan)
     {
-        //TODO: calc based on plan interval
-        $renewsAt = Carbon::now()->addMonths(1 * $plan->interval_count);
+        if ($plan->interval === 'year') {
+            $renewsAt = Carbon::now()->addYears($plan->interval_count);
+        } else if ($plan->interval === 'week') {
+            $renewsAt = Carbon::now()->addWeeks($plan->interval_count);
+        } else {
+            $renewsAt = Carbon::now()->addMonths($plan->interval_count);
+        }
 
         $this->subscriptions()->create([
             'plan_id' => $plan->id,
@@ -57,6 +64,7 @@ trait Billable
      */
     public function subscriptions()
     {
-        return $this->hasMany(Subscription::class, 'user_id');
+        // always return subscriptions that are not attached to any gateway last
+        return $this->hasMany(Subscription::class, 'user_id')->orderBy(DB::raw('FIELD(gateway, "none")'), 'asc');
     }
 }

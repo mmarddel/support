@@ -4,10 +4,9 @@ use App\Reply;
 use App\Ticket;
 use Illuminate\Broadcasting\Channel;
 use Illuminate\Broadcasting\InteractsWithSockets;
-use Illuminate\Broadcasting\PrivateChannel;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
-use Illuminate\Queue\SerializesModels;
 use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Queue\SerializesModels;
 
 class TicketReplyCreated implements ShouldQueue, ShouldBroadcast
 {
@@ -29,6 +28,11 @@ class TicketReplyCreated implements ShouldQueue, ShouldBroadcast
     public $replyId;
 
     /**
+     * @var int
+     */
+    public $ticketId;
+
+    /**
      * @param Ticket $ticket
      * @param Reply $reply
      * @internal param Reply $reply
@@ -40,16 +44,15 @@ class TicketReplyCreated implements ShouldQueue, ShouldBroadcast
         $this->creatorId = $ticket->user_id;
         $this->replyId = $reply->id;
         $this->replyType = $reply->type;
+        $this->ticketId = $reply->ticket_id;
     }
 
     /**
-     * Get the channels the event should broadcast on.
-     *
      * @return Channel|array
      */
     public function broadcastOn()
     {
-        return [new PrivateChannel('tickets.global'), new PrivateChannel("App.User.{$this->creatorId}")];
+        return new Channel('tickets');
     }
 
     /**
@@ -59,6 +62,6 @@ class TicketReplyCreated implements ShouldQueue, ShouldBroadcast
      */
     public function broadcastWhen()
     {
-        return $this->replyType !== 'drafts';
+        return $this->replyType !== Reply::DRAFT_TYPE;
     }
 }

@@ -54,7 +54,7 @@ class CannedReplyRepository {
      */
     public function paginateCannedReplies($params)
     {
-        $paginator = new Paginator($this->cannedReply);
+        $paginator = new Paginator($this->cannedReply, $params);
         $paginator->with('uploads');
 
         if ($userId = Arr::get($params, 'user_id')) {
@@ -65,7 +65,7 @@ class CannedReplyRepository {
             $paginator->query()->orWhere('shared', true);
         }
 
-        return $paginator->paginate($params);
+        return $paginator->paginate();
     }
 
     /**
@@ -128,7 +128,8 @@ class CannedReplyRepository {
      */
     private function syncUploads(CannedReply $cannedReply, $uploads)
     {
-        if ( ! $uploads) return;
-        $cannedReply->uploads()->sync($uploads);
+        if ( ! is_null($uploads)) {
+            $cannedReply->uploads()->sync($uploads);
+        }
     }
 }

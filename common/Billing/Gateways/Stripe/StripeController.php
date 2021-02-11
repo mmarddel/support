@@ -2,12 +2,14 @@
 
 use App\User;
 use Common\Billing\BillingPlan;
+use Common\Billing\GatewayException;
 use Common\Billing\Subscription;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Common\Core\Controller;
+use Common\Core\BaseController;
 use Omnipay\Common\Exception\InvalidCreditCardException;
 
-class StripeController extends Controller
+class StripeController extends BaseController
 {
     /**
      * @var Request
@@ -30,8 +32,6 @@ class StripeController extends Controller
     private $stripe;
 
     /**
-     * SubscriptionsController constructor.
-     *
      * @param Request $request
      * @param BillingPlan $billingPlan
      * @param Subscription $subscription
@@ -53,9 +53,7 @@ class StripeController extends Controller
     }
 
     /**
-     * Create a new subscription on stripe.
-     *
-     * @return \Illuminate\Http\JsonResponse
+     * @return JsonResponse
      */
     public function createSubscription()
     {
@@ -69,16 +67,45 @@ class StripeController extends Controller
         $plan = $this->billingPlan->findOrFail($this->request->get('plan_id'));
 
         $sub = $this->stripe->subscriptions()->create($plan, $user, $this->request->get('start_date'));
-        $user->subscribe('stripe', $sub['reference'], $plan);
 
-        return $this->success(['user' => $user]);
+        if ($sub['status'] !== 'requires_action') {
+            $user->subscribe('stripe', $sub['reference'], $plan);
+        }
+
+        $sub['user'] = $user->loadPermissions()->load('subscriptions.plan');
+
+        return $this->success($sub);
     }
 
     /**
-     * Add a new bank card to user using stripe token.
+     * Finalize 3d secure subscription on stripe.
+     */
+    public function finalizeSubscription()
+    {
+        $user = $this->request->user();
+
+        $subscriptionStub = new Subscription([
+            'gateway_id' => $this->request->get('reference'),
+            'user' => $this->request->user()
+        ]);
+        $stripeSubscription = $this->stripe->subscriptions()->find($subscriptionStub)['subscription'];
+
+        if ( ! $stripeSubscription || $stripeSubscription['status'] !== 'active') {
+            throw new GatewayException('Stripe subscription does not exist or is not active.');
+        }
+
+        $plan = $this->billingPlan->where('uuid', $stripeSubscription['plan']['id'])->first();
+        $user->subscribe('stripe', $stripeSubscription['id'], $plan);
+        $sub['user'] = $user->loadPermissions()->load('subscriptions.plan');
+
+        return $this->success($sub);
+    }
+
+    /**
+     * Add a new bank card to user using stripe token.chan
      *
-     * @return \Illuminate\Http\JsonResponse
-     * @throws \Common\Billing\GatewayException
+     * @return JsonResponse
+     * @throws GatewayException
      */
     public function addCard()
     {
@@ -89,9 +116,9 @@ class StripeController extends Controller
         try {
             $user = $this->stripe->addCard($this->request->user(), $this->request->get('token'));
         } catch (InvalidCreditCardException $e) {
-            return $this->error(['general' => $e->getMessage()]);
+            return $this->error($e->getMessage());
         }
 
-        return $this->success(['user' => $user]);
+        return $this->success(['user' => $user->loadPermissions()->load('subscriptions.plan')]);
     }
 }

@@ -5,6 +5,7 @@ use App\Reply;
 use App\Ticket;
 use Common\Files\FileEntry;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Str;
 
 class ReplyRepository {
 
@@ -68,7 +69,7 @@ class ReplyRepository {
     {
         $query = $this->getRepliesIndexQuery($params['ticket_id']);
 
-        $paginated = $query->paginate(isset($params['per_page']) ? $params['per_page'] : 10);
+        $paginated = $query->paginate(isset($params['perPage']) ? $params['perPage'] : 10);
 
         return $paginated;
     }
@@ -148,14 +149,14 @@ class ReplyRepository {
      *
      * @return Reply
      */
-    public function create($data, Ticket $ticket, $type = 'replies')
+    public function create($data, Ticket $ticket, $type = Reply::REPLY_TYPE)
     {
         $reply = $this->reply->create([
             'body'      => isset($data['body']) ? $data['body'] : '',
             'user_id'   => isset($data['user_id']) ? $data['user_id'] : Auth::user()->id,
             'ticket_id' => $ticket->id,
             'type'      => $type,
-            'uuid'      => str_random(30),
+            'uuid'      => Str::random(30),
         ]);
 
         if ( ! empty($data['uploads'])) {
@@ -178,16 +179,16 @@ class ReplyRepository {
         $query->where(function(Builder $replyQuery) {
 
             //load all replies
-            $replyQuery->where('type', 'replies');
+            $replyQuery->where('type', Reply::REPLY_TYPE);
 
             //load only drafts current user has created
             $replyQuery->orWhere(function(Builder $draftQuery) {
-                $draftQuery->where('type', 'drafts')->where('user_id', Auth::user()->id);
+                $draftQuery->where('type', Reply::DRAFT_TYPE)->where('user_id', Auth::user()->id);
             });
 
             //load notes if current user is agent
             if (Auth::user()->isAgent()) {
-                $replyQuery->orWhere('type', 'notes');
+                $replyQuery->orWhere('type', Reply::NOTE_TYPE);
             };
         });
 

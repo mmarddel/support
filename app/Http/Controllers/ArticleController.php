@@ -2,13 +2,14 @@
 
 use App\Article;
 use App\Jobs\IncrementArticleViews;
+use App\Services\HelpCenter\Actions\GenerateArticleContentNav;
 use Illuminate\Http\Request;
 use App\Http\Requests\ModifyArticles;
 use App\Services\HelpCenter\ArticleRepository;
 use Symfony\Component\HttpFoundation\JsonResponse;
-use Common\Core\Controller;
+use Common\Core\BaseController;
 
-class ArticleController extends Controller {
+class ArticleController extends BaseController {
 
     /**
      * @var Request
@@ -57,7 +58,10 @@ class ArticleController extends Controller {
         $article = $this->repository->findOrFail($id, $this->request->all());
         dispatch(new IncrementArticleViews($article->id));
 
-        return $this->success(['article' => $article]);
+        return $this->success([
+            'article' => $article,
+            'contentNav' => app(GenerateArticleContentNav::class)->execute($article),
+        ]);
     }
 
     /**
@@ -74,6 +78,8 @@ class ArticleController extends Controller {
 
         $article = $this->repository->update($id, $this->request->all());
 
+        cache()->forget(HelpCenterController::HC_HOME_CACHE_KEY);
+
         return $this->success(['data' => $article]);
     }
 
@@ -88,6 +94,8 @@ class ArticleController extends Controller {
         $this->authorize('store', Article::class);
 
         $article = $this->repository->create($this->request->all());
+
+        cache()->forget(HelpCenterController::HC_HOME_CACHE_KEY);
 
         return $this->success(['data' => $article], 201);
     }
@@ -107,6 +115,8 @@ class ArticleController extends Controller {
         ]);
 
         $deleted = $this->repository->deleteMultiple($this->request->get('ids'));
+
+        cache()->forget(HelpCenterController::HC_HOME_CACHE_KEY);
 
         return $this->success(['data' => $deleted], 202);
     }

@@ -1,17 +1,20 @@
 <?php namespace App\Http\Controllers;
 
-use Cache;
 use App\Category;
+use App\Services\Mail\IncomingMailHandler;
+use Cache;
 use Carbon\Carbon;
+use Common\Core\BaseController;
 use Common\Settings\Settings;
-use Common\Core\Controller;
-use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
-class HelpCenterController extends Controller
+class HelpCenterController extends BaseController
 {
+    const HC_HOME_CACHE_KEY = 'hc.home';
+
     /**
      * @var Category $category
      */
@@ -48,9 +51,7 @@ class HelpCenterController extends Controller
     {
         $this->authorize('index', Category::class);
 
-        $categoryLimit = $this->settings->get('hc_home.children_per_category');
-        $articleLimit = $this->settings->get('hc_home.articles_per_category');
-        $data = $this->getHelpCenterData('hc.home', $categoryLimit, $articleLimit);
+        $data = $this->getHelpCenterData();
 
         $options = [
             'prerender' => [
@@ -86,28 +87,41 @@ class HelpCenterController extends Controller
         return $this->success(['categories' => $data]);
     }
 
-    private function getHelpCenterData($cacheKey, $categoryLimit = 6, $articleLimit = 5)
+    private function getHelpCenterData()
     {
-        return Cache::remember($cacheKey, Carbon::now()->addDays(2), function() use($categoryLimit, $articleLimit) {
+        return Cache::remember(self::HC_HOME_CACHE_KEY, Carbon::now()->addDays(2), function() {
+
+            $loadArticles = ['articles' => function(BelongsToMany $query) {
+                $query->select('id', 'title', 'position', 'slug');
+            }];
+
             //load categories with children and articles
             $categories = $this->category
                 ->rootOnly()
+                ->where('hidden', false)
                 ->orderByPosition()
                 ->limit(10)
                 ->withCount('children')
-                ->with(['children' => function($query) {
-                    $query->withCount('articles')->with(['articles' => function(BelongsToMany $query) {
-                        $query->select('id', 'title', 'position', 'slug');
-                    }]);
+                ->with($loadArticles)
+                ->with(['children' => function(HasMany $query) use($loadArticles) {
+                    $query->where('hidden', false)->withCount('articles')->with($loadArticles);
                 }])->get();
 
-            //limit children and categories
-            return $categories->each(function(Category $category) use($categoryLimit, $articleLimit) {
-                $category->setRelation('children', $category->children->take($categoryLimit));
+            $categoryLimit = $this->settings->get('hc_home.children_per_category', 6);
+            $articleLimit = $this->settings->get('hc_home.articles_per_category', 5);
 
+            return $categories->each(function(Category $category) use($categoryLimit, $articleLimit) {
+                // limit child category and child category article count
+                $category->setRelation('children', $category->children->take($categoryLimit));
                 $category->children->each(function(Category $child) use($articleLimit) {
                     $child->setRelation('articles', $child->articles->take($articleLimit));
                 });
+
+                // chunk parent category articles into "virtual" child categories
+                if ($category->children->isEmpty()) {
+                    $category->chunked_articles = $category->articles->values()->chunk($articleLimit)->map->values()->take($categoryLimit);
+                }
+                $category->unsetRelation('articles');
             });
         });
     }

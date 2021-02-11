@@ -2,11 +2,12 @@
 
 namespace Common\Admin\Analytics;
 
-use Exception;
-use Illuminate\Support\ServiceProvider;
 use Common\Admin\Analytics\Actions\GetAnalyticsData;
-use Common\Admin\Analytics\Actions\GetNullAnalyticsData;
+use Common\Admin\Analytics\Actions\GetDemoAnalyticsData;
 use Common\Admin\Analytics\Actions\GetGoogleAnalyticsData;
+use Common\Admin\Analytics\Actions\GetNullAnalyticsData;
+use Illuminate\Support\ServiceProvider;
+use Spatie\Analytics\Exceptions\InvalidConfiguration;
 
 class AnalyticsServiceProvider extends ServiceProvider
 {
@@ -33,14 +34,8 @@ class AnalyticsServiceProvider extends ServiceProvider
     {
         try {
             return $this->app->make(GetGoogleAnalyticsData::class);
-        } catch (Exception $e) {
-            // don't pollute logs with useless errors if
-            // user did not set up google analytics yet
-            if (str_contains($e->getMessage(), "Can't find the .p12 certificate")) {
-                return new GetNullAnalyticsData();
-            } else {
-                throw($e);
-            }
+        } catch (InvalidConfiguration $e) {
+            return new GetNullAnalyticsData();
         }
     }
 }

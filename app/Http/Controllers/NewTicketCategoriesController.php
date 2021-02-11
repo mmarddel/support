@@ -2,13 +2,13 @@
 
 use Auth;
 use App\Tag;
-use Common\Core\Controller;
+use Common\Core\BaseController;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Common\Settings\Settings;
 use Illuminate\Support\Collection;
 
-class NewTicketCategoriesController extends Controller
+class NewTicketCategoriesController extends BaseController
 {
     /**
      * @var Request
@@ -28,6 +28,8 @@ class NewTicketCategoriesController extends Controller
     {
         $this->request = $request;
         $this->settings = $settings;
+
+        $this->middleware('auth');
     }
 
     /**
@@ -42,8 +44,8 @@ class NewTicketCategoriesController extends Controller
         $tags = app(Tag::class)
             ->where('type', 'category')
             ->with('categories')
-            ->limit(50)
-            ->get();
+            ->limit(150)
+            ->get(['id', 'name', 'display_name', 'type']);
 
         return $this->success([
             'tags' => $this->filterCategoriesByPurchases($tags),
@@ -54,7 +56,7 @@ class NewTicketCategoriesController extends Controller
      * Filter specified tags by current user envato purchases.
      *
      * @param Tag[]|Collection $tags
-     * @return array
+     * @return Collection
      */
     private function filterCategoriesByPurchases($tags)
     {
@@ -62,7 +64,7 @@ class NewTicketCategoriesController extends Controller
 
         $requireCode = $this->settings->get('envato.enable') && $this->settings->get('envato.require_purchase_code');
 
-        if ( ! $requireCode || $user->isSuperAdmin()) return $tags;
+        if ( ! $requireCode || ($user && $user->isSuperAdmin())) return $tags;
 
         $names = $user->purchase_codes->pluck('item_name')
             ->map(function($name) { return strtolower($name); });

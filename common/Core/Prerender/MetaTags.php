@@ -6,7 +6,8 @@ use Common\Core\Contracts\AppUrlGenerator;
 use Common\Core\Prerender\Actions\ReplacePlaceholders;
 use Common\Settings\Settings;
 use Illuminate\Contracts\Support\Arrayable;
-use Illuminate\Support\Arr;
+use Arr;
+use Str;
 
 class MetaTags implements Arrayable
 {
@@ -66,7 +67,30 @@ class MetaTags implements Arrayable
 
     public function toArray()
     {
-        return $this->getAll();
+        // remove all tags to which placeholders could not be replaced with actual content
+        $tags = collect($this->getAll())
+            ->map(function($tag) {
+                // ld+json tags will contain child arrays
+                $strings = array_filter($tag, function($value) {
+                    return !is_array($value);
+                });
+                $content = implode($strings);
+                $shouldRemove = Str::contains($content, '{{') && Str::contains($content, '}}');
+
+                // if could not replace title placeholder, return app name as title instead
+                if ($shouldRemove && $tag['nodeName'] === 'title') {
+                    $tag['_text'] = config('app.name');
+                    $shouldRemove = false;
+                };
+                if ($shouldRemove && Arr::get($tag, 'property') === 'og:title') {
+                    $tag['content'] = config('app.name');
+                    $shouldRemove = false;
+                };
+
+                return $shouldRemove ? null : $tag;
+            });
+
+        return $tags->filter()->values()->toArray();
     }
 
     public function getTitle()
@@ -77,6 +101,11 @@ class MetaTags implements Arrayable
     public function getDescription()
     {
         return $this->get('og:description');
+    }
+
+    public function getImage()
+    {
+        return url($this->get('og:image'));
     }
 
     /**
@@ -96,18 +125,18 @@ class MetaTags implements Arrayable
     public function get($value, $prop = 'property')
     {
         $tag = Arr::first($this->generatedTags, function($tag) use($prop, $value) {
-            return $tag[$prop] === $value;
+            return Arr::get($tag, $prop) === $value;
         }, []);
 
         return Arr::get($tag, 'content');
     }
 
-    public function getData($selector = null)
+    public function getData($selector = null, $default = null)
     {
-        return Arr::get($this->data, $selector);
+        return Arr::get($this->data, $selector) ?? $default;
     }
 
-    public function getAll()
+    public function getAll(): array
     {
         return $this->generatedTags;
     }
@@ -122,7 +151,7 @@ class MetaTags implements Arrayable
     {
         $string = '';
 
-        foreach(array_except($tag, 'nodeName') as $key => $value) {
+        foreach(Arr::except($tag, 'nodeName') as $key => $value) {
             $value = is_array($value) ? implode(',', $value) : $value;
             $string .= "$key=\"$value\" ";
         }
@@ -130,21 +159,16 @@ class MetaTags implements Arrayable
         return trim($string);
     }
 
-    private function generateTags()
+    private function generateTags(): array
     {
         $tags = $this->tags;
 
         $tags = array_map(function($tag) {
-            // if tag does not have "content" or "_text" prop, we can continue
-            if (array_key_exists('content', $tag)) {
-                $tag['content'] = $this->replacePlaceholders($tag['content']);
-            } else if (array_key_exists('_text', $tag)) {
-                $tag['_text'] = $this->replacePlaceholders($tag['_text']);
-            }
-            return $tag;
+            return $this->replacePlaceholders($tag);
         }, $tags);
-
+        $tags = $this->removeEmptyValues($tags);
         $tags = $this->duplicateTags($tags);
+        $tags = $this->escapeValues($tags);
 
         $tags = array_map(function($tag) {
             // set nodeName to <meta> tag, if not already specified
@@ -153,6 +177,44 @@ class MetaTags implements Arrayable
             }
             return $tag;
         }, $tags);
+
+        return $tags;
+    }
+
+    function removeEmptyValues(array &$array): array {
+        foreach ($array as $key => &$value) {
+            if (is_array($value)) {
+                $value = $this->removeEmptyValues($value);
+            }
+            if (empty($value)) {
+                unset($array[$key]);
+            }
+        }
+        return $array;
+    }
+
+    private function replacePlaceholders(array $tag): array
+    {
+        $replacer = app(ReplacePlaceholders::class);
+
+        // if tag does not have "content" or "_text" prop, we can continue
+        if (array_key_exists('content', $tag)) {
+            $tag['content'] = $replacer->execute($tag['content'], $this->data);
+        } else if (array_key_exists('_text', $tag)) {
+            $tag['_text'] = $replacer->execute($tag['_text'], $this->data);
+        }
+
+        return $tag;
+    }
+
+    private function escapeValues(array $tags): array
+    {
+        // only escape meta tags that have "content" property
+        foreach ($tags as $key => $tag) {
+            if (array_key_exists('content', $tag)) {
+                $tags[$key]['content'] = str_replace('"', '&quot;', $tag['content']);
+            }
+        }
 
         return $tags;
     }
@@ -167,6 +229,8 @@ class MetaTags implements Arrayable
     private function duplicateTags($tags)
     {
         foreach ($tags as $tag) {
+            if ( ! isset($tag['content'])) continue;
+
             if (Arr::get($tag, 'property') === 'og:url') {
                 $tags[] = [
                     'nodeName' => 'link',
@@ -184,7 +248,7 @@ class MetaTags implements Arrayable
 
             if (Arr::get($tag, 'property') === 'og:description') {
                 $tags[] = [
-                    'property' => 'description',
+                    'name' => 'description',
                     'content' => $tag['content'],
                 ];
             }
@@ -193,16 +257,7 @@ class MetaTags implements Arrayable
         return $tags;
     }
 
-    private function replacePlaceholders($config)
-    {
-        return app(ReplacePlaceholders::class)->execute($config, $this->data);
-    }
-
-    /**
-     * @param array $metaTags
-     * @return array
-     */
-    private function overrideTagsWithUserValues($metaTags)
+    private function overrideTagsWithUserValues(array $metaTags): array
     {
         $overrides = app(Settings::class)->all();
         foreach ($metaTags as $key => $tagConfig) {

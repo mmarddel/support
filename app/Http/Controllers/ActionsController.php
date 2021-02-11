@@ -2,9 +2,9 @@
 
 use App\Action;
 use Illuminate\Database\Eloquent\Collection;
-use Common\Core\Controller;
+use Common\Core\BaseController;
 
-class ActionsController extends Controller
+class ActionsController extends BaseController
 {
     /**
      * Action model instance.

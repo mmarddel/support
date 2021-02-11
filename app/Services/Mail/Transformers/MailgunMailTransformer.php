@@ -2,7 +2,7 @@
 
 use Exception;
 use GuzzleHttp\Client;
-use Illuminate\Support\Arr;
+use Arr;
 
 class MailgunMailTransformer implements MailTransformer
 {
@@ -103,7 +103,6 @@ class MailgunMailTransformer implements MailTransformer
 
         return array_map(function($attachment) {
             $contents = $this->getRemoteAttachmentContents($attachment['url']);
-
             return [
                 'original_name' => $attachment['name'],
                 'mime_type'     => $attachment['content-type'],

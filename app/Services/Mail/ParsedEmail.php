@@ -1,14 +1,15 @@
 <?php namespace App\Services\Mail;
 
 use App;
+use App\Services\Mail\Transformers\MailTransformer;
 use Common\Settings\Settings;
-use Illuminate\Support\Arr;
-use Illuminate\Support\Collection;
-use Illuminate\Support\Str;
-use InvalidArgumentException;
 use EmailReplyParser\Parser\EmailParser;
 use Illuminate\Contracts\Support\Jsonable;
-use App\Services\Mail\Transformers\MailTransformer;
+use Arr;
+use Illuminate\Support\Collection;
+use Str;
+use InvalidArgumentException;
+use ZBateson\MailMimeParser\MailMimeParser;
 
 class ParsedEmail implements Jsonable
 {
@@ -71,14 +72,19 @@ class ParsedEmail implements Jsonable
             $this->email['body']['stripped-html'] = (new EmailParser())->parse($body)->getVisibleText();
         }
 
-        $body = $this->getBody('stripped-html');
+        $body = $this->email['body']['stripped-html'];
 
         //replace CIDs in img src with actual image urls
         foreach($cidMap as $cid => $url) {
             $body = str_replace("cid:$cid", $url, $body);
         }
 
-        return $this->emailBodyParser->parse($body);
+        $parsedBody = $this->emailBodyParser->parse($body);
+        if ( ! $parsedBody) {
+            $parsedBody = $this->emailBodyParser->parse($this->getBody('plain'));
+        }
+
+        return $parsedBody;
     }
 
 
@@ -101,9 +107,12 @@ class ParsedEmail implements Jsonable
     public function getSenderEmail()
     {
         $header = $this->getHeader('Reply-To') ?: $this->getHeader('From');
-        preg_match('/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,4}\b/i', $header, $match);
 
-        if (isset($match[0])) return $match[0];
+        $email = (new MailMimeParser())->parse("From: $header")->getHeader('From')->getEmail();
+
+        if ($email) {
+            return $email;
+        }
 
         throw new InvalidArgumentException("Could not extract email address from [$header]");
     }
@@ -174,7 +183,7 @@ class ParsedEmail implements Jsonable
 
         //if attachment has a CID then it's inline, otherwise it's 'regular'
         return collect($attachments)->filter(function($attachment) use($type) {
-            $cidEmbedded = $attachment['cid'] && str_contains($this->getBody('html'), $attachment['cid']);
+            $cidEmbedded = $attachment['cid'] && \Str::contains($this->getBody('html'), $attachment['cid']);
 
             //if email body does not have attachment CID embedded, treat attachment as 'regular'
             if ($type === 'inline') {

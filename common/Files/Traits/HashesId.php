@@ -6,7 +6,7 @@ trait HashesId
 {
     public function getHashAttribute()
     {
-        return trim(base64_encode(str_pad($this->getOriginal('id').'|', 10, 'padding')), '=');
+        return trim(base64_encode(str_pad($this->getRawOriginal('id').'|', 10, 'padding')), '=');
     }
 
     public function scopeWhereHash(Builder $query, $value)

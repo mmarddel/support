@@ -1,5 +1,6 @@
 <?php namespace App\Scout;
 
+use Arr;
 use Illuminate\Database\Eloquent\Model;
 use Laravel\Scout\Builder;
 use Laravel\Scout\Engines\Engine;
@@ -67,7 +68,15 @@ class MysqlSearchEngine extends Engine
             return call_user_func($builder->callback, null, $builder->query, $options);
         }
 
-        return $builder->model->basicSearch($builder->query, $options['perPage'], $options['page']);
+       $query = $builder->model->basicSearch($builder->query, $options['perPage'], $options['page']);
+
+        if ( ! empty($builder->orders)) {
+            foreach ($builder->orders as $order) {
+                $query->orderBy(Arr::get($order, 'column'), Arr::get($order, 'direction'));
+            }
+        }
+
+        return $query;
     }
 
     /**
@@ -84,11 +93,12 @@ class MysqlSearchEngine extends Engine
     /**
      * Map the given results to instances of the given model.
      *
-     * @param  mixed  $results
-     * @param  Model  $model
+     * @param Builder $builder
+     * @param mixed $results
+     * @param Model $model
      * @return \Illuminate\Database\Eloquent\Collection
      */
-    public function map($results, $model)
+    public function map(Builder $builder, $results, $model)
     {
         return $results;
     }
@@ -102,5 +112,13 @@ class MysqlSearchEngine extends Engine
     public function getTotalCount($results)
     {
         return count($results);
+    }
+
+    /**
+     * @inheritDoc
+     */
+    public function flush($model)
+    {
+        //
     }
 }

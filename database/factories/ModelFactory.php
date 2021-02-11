@@ -11,12 +11,14 @@
 |
 */
 
+use Illuminate\Support\Str;
+
 $factory->define(App\User::class, function (Faker\Generator $faker) {
     return [
         'first_name' => $faker->name,
         'email' => $faker->safeEmail,
-        'password' => str_random(10),
-        'remember_token' => str_random(10),
+        'password' => Str::random(10),
+        'remember_token' => Str::random(10),
         'language' => $faker->languageCode,
         'avatar'   => str_replace('http://', 'https://', $faker->imageUrl(64, 64)),
         'permissions' => '{"tickets.own.view":true,"tickets.own.update":true,"tickets.create":true,"tickets.own.delete":true}'
@@ -55,7 +57,7 @@ $factory->define(App\Reply::class, function (Faker\Generator $faker) {
         'body' => $faker->paragraph,
         'user_id' => $faker->numberBetween(50, 150),
         'ticket_id' => $faker->numberBetween(50, 150),
-        'uuid' => str_random(30),
+        'uuid' => Str::random(30),
     ];
 });
 

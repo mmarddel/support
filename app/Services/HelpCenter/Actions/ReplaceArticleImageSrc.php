@@ -22,7 +22,7 @@ class ReplaceArticleImageSrc
             $oldSrc  = $node->attr('src');
             $needles = [$oldBaseUri, 'http://localhost:4200'];
 
-            if (str_contains($oldSrc, $needles)) {
+            if (\Str::contains($oldSrc, $needles)) {
                 $newSrc = str_replace($needles, $newBaseUri, $oldSrc);
                 $node->getNode(0)->setAttribute('src', $newSrc);
             }

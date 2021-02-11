@@ -1,6 +1,6 @@
 <?php namespace Common\Localizations;
 
-use Illuminate\Support\Str;
+use Arr;
 use Illuminate\Filesystem\Filesystem;
 use Illuminate\Database\Eloquent\Collection;
 
@@ -25,8 +25,6 @@ class LocalizationsRepository
     ];
 
     /**
-     * LocalizationsRepository constructor.
-     *
      * @param Filesystem $fs
      * @param Localization $localization
      */
@@ -37,8 +35,6 @@ class LocalizationsRepository
     }
 
     /**
-     * Get all existing localizations.
-     *
      * @return Collection
      */
     public function all()
@@ -49,58 +45,55 @@ class LocalizationsRepository
     }
 
     /**
-     * Get localization by specified name.
-     *
      * @param string $name
      * @return array
      */
-    public function getByName($name)
+    public function getByNameOrCode($name)
     {
-        $localization = $this->localization->where('name', $name)->first();
+        $localization = $this->localization->where('name', $name)->orWhere('language', $name)->first();
         if ( ! $localization) return null;
 
         return ['model' => $localization, 'lines' => $this->getLocalizationLines($localization)];
     }
 
-    /**
-     * Update specified localization.
-     *
-     * @param integer $id
-     * @param array $data
-     * @return array
-     */
-    public function update($id, $data)
+    public function update(int $id, array $data, $overrideLines = false)
     {
         $localization = $this->localization->findOrFail($id);
+        $language = Arr::get($data, 'language');
 
         if (isset($data['name']) && $data['name'] !== $localization->name) {
-            $this->renameLocalizationLinesFile($localization, $data['name']);
-            $localization->fill(['name' => $data['name']])->save();
+            $localization->name = $data['name'];
         }
 
-        if (isset($data['lines']) && $data['lines'] && ! empty($data['lines'])) {
-            $this->storeLocalizationLines($localization, $data['lines']);
+        if ($language && $language !== $localization->language) {
+            $this->renameLocalizationLinesFile($localization, $language);
+            $localization->language = $language;
         }
 
-        return $this->getByName($localization->name);
+        if (isset($data['lines']) && $data['lines']) {
+            $this->storeLocalizationLines($localization, $data['lines'], $overrideLines);
+        }
+
+        $localization->save();
+
+        return $this->getByNameOrCode($localization->name);
     }
 
     /**
-     * Create a new localiztation.
-     *
-     * @param string $name
+     * @param array $params
      * @return array
      */
-    public function create($name)
+    public function create($params)
     {
         $localization = $this->localization->create([
-            'name' => $name,
+            'name' => $params['name'],
+            'language' => $params['language'],
         ]);
 
         $lines = $this->getDefaultTranslationLines();
         $this->storeLocalizationLines($localization, $lines);
 
-        return $this->getByName($localization->name);
+        return $this->getByNameOrCode($localization->name);
     }
 
     /**
@@ -108,7 +101,6 @@ class LocalizationsRepository
      *
      * @param integer $id
      * @return bool|null
-     * @throws \Exception
      */
     public function delete($id)
     {
@@ -136,12 +128,12 @@ class LocalizationsRepository
         return $combined;
     }
 
-    public function storeLocalizationLines(Localization $localization, $newLines)
+    public function storeLocalizationLines(Localization $localization, $newLines, $override = false)
     {
         $path = $this->makeLocalizationLinesPath($localization);
         $oldLines = [];
 
-        if (file_exists($path)) {
+        if ( !$override && file_exists($path)) {
             $oldLines = json_decode(file_get_contents($path), true);
         }
 
@@ -151,8 +143,6 @@ class LocalizationsRepository
     }
 
     /**
-     * Get translation lines for specified localization.
-     *
      * @param Localization $localization
      * @return array
      */
@@ -169,21 +159,18 @@ class LocalizationsRepository
 
     public function makeLocalizationLinesPath(Localization $localization)
     {
-        $name = Str::slug($localization->name);
-        return resource_path("lang/$name.json");
+        return resource_path("lang/$localization->language.json");
     }
 
     /**
-     * Rename specified localization's lines file.
-     *
      * @param Localization $localization
-     * @param string $newName
+     * @param string $newLangCode
      * @return bool
      */
-    private function renameLocalizationLinesFile(Localization $localization, $newName)
+    public function renameLocalizationLinesFile(Localization $localization, $newLangCode)
     {
         $oldPath = $this->makeLocalizationLinesPath($localization);
-        $newPath = str_replace($localization->name, $newName, $oldPath);
+        $newPath = str_replace($localization->language, $newLangCode, $oldPath);
         return $this->fs->move($oldPath, $newPath);
     }
 }

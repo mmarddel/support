@@ -5,7 +5,6 @@ var app = new Vue({
     },
     data: function() {
         return {
-            appName: 'BeDesk',
             errorMessage: null,
             loading: false,
 
@@ -164,7 +163,7 @@ var app = new Vue({
                 return response;
             }).catch(function (error) {
                 vue.loading = false;
-                vue.errorMessage = error.response.data;
+                vue.errorMessage = error.response.data || 'An unspecified error occurred';
                 return false;
             });
         }

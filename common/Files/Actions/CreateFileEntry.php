@@ -7,7 +7,9 @@ use Auth;
 use Common\Files\Events\FileEntryCreated;
 use Common\Files\FileEntry;
 use Illuminate\Http\UploadedFile;
-use Illuminate\Support\Arr;
+use Arr;
+use Illuminate\Support\Collection;
+use Str;
 
 class CreateFileEntry
 {
@@ -32,17 +34,16 @@ class CreateFileEntry
     public function execute($fileOrData, $extra)
     {
         if (is_array($fileOrData)) {
-            $data = $fileOrData;
+            $data = Arr::except($fileOrData, ['contents']);
         } else {
             $data = app(UploadedFileToArray::class)->execute($fileOrData);
         }
 
         // merge extra data specified by user
         $data = array_merge($data, [
-            'path' => Arr::get($extra, 'path'),
-            'parent_id' => Arr::get($extra, 'parent_id'),
-            'public_path' => Arr::get($extra, 'public_path'),
-            'public' => Arr::get($extra, 'public_path') ? 1 : 0
+            'parent_id' => Arr::get($extra, 'parentId'),
+            'disk_prefix' => Arr::get($extra, 'diskPrefix'),
+            'public' => !!Arr::get($extra, 'diskPrefix'),
         ]);
 
         // public files will be stored with extension
@@ -50,11 +51,13 @@ class CreateFileEntry
             $data['file_name'] = $data['file_name'] . '.' . $data['extension'];
         }
 
-        $userId = Arr::get($extra, 'user_id', Auth::id());
+        $userId = Arr::get($extra, 'userId', Auth::id());
+        $relativePath = Arr::get($extra, 'relativePath');
         $entries = collect();
 
-        if (Arr::get($data, 'path')) {
-            $entries = $entries->merge($this->createPath($data['path'], $data['parent_id'], $userId));
+        // uploading a folder
+        if ($relativePath && !$data['public']) {
+            $entries = $entries->merge($this->createPath($relativePath, $data['parent_id'], $userId));
             $parent = $entries->last();
             if ($parent) $data['parent_id'] = $parent->id;
         }
@@ -86,13 +89,13 @@ class CreateFileEntry
      * @param string $path
      * @param integer|null $parentId
      * @param integer $userId
-     * @return \Illuminate\Support\Collection
+     * @return Collection
      */
     private function createPath($path, $parentId, $userId)
     {
         $path = collect(explode('/', $path));
         $path = $path->filter(function($name) {
-            return $name && ! str_contains($name, '.');
+            return $name && !Str::contains($name, '.');
         });
 
         if ($path->isEmpty()) return $path;
@@ -110,7 +113,7 @@ class CreateFileEntry
 
             // check if user already has a folder with that name and parent
             $folder = $this->entry->where($values)
-                ->whereOwner($userId)
+                ->whereUser($userId)
                 ->first();
 
             if ( ! $folder) {

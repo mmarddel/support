@@ -3,6 +3,7 @@
 use App\Ticket;
 use App\Services\Triggers\Conditions\AbstractCondition;
 use App\User;
+use Str;
 
 class TicketAssigneeCondition extends AbstractCondition {
 
@@ -23,10 +24,10 @@ class TicketAssigneeCondition extends AbstractCondition {
     {
         if ( ! $originalTicket) return false;
 
-        $methodName = 'assignee'.ucfirst(camel_case($operatorName));
+        $methodName = 'assignee'.ucfirst(Str::camel($operatorName));
 
         // if conditionValue is email, fetch matching user ID
-        if (is_string($conditionValue) && str_contains($conditionValue, '@')) {
+        if (is_string($conditionValue) && Str::contains($conditionValue, '@')) {
             $user = app(User::class)->where('email', $conditionValue)->first();
             $conditionValue = $user ? $user->id : null;
         }

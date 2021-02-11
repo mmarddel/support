@@ -2,9 +2,9 @@
 
 use App\Ticket;
 use App\Services\Ticketing\TicketRepository;
-use Common\Core\Controller;
+use Common\Core\BaseController;
 
-class TicketsMergeController extends Controller {
+class TicketsMergeController extends BaseController {
 
     /**
      * @var TicketRepository

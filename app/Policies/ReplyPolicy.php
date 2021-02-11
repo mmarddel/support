@@ -3,14 +3,13 @@
 use App\User;
 use App\Reply;
 use App\Ticket;
+use Common\Core\Policies\BasePolicy;
 use Illuminate\Auth\Access\HandlesAuthorization;
 
-class ReplyPolicy
+class ReplyPolicy extends BasePolicy
 {
-    use HandlesAuthorization;
-
     public function show(User $user, Reply $reply) {
-        $replyBelongsToUserTicket = ($reply->ticket && $reply->ticket->user_id === $user->id) && $reply->type === 'replies';
+        $replyBelongsToUserTicket = ($reply->ticket && $reply->ticket->user_id === $user->id) && $reply->type === Reply::REPLY_TYPE;
         return $replyBelongsToUserTicket || $reply->user_id === $user->id || $user->hasPermission('replies.view');
     }
 
@@ -23,7 +22,7 @@ class ReplyPolicy
     }
 
     public function update(User $user, Reply $reply) {
-        $isDraft = $reply && $reply->user_id === $user->id && $reply->type === 'drafts';
+        $isDraft = $reply && $reply->user_id === $user->id && $reply->type === Reply::DRAFT_TYPE;
         return $isDraft || $user->hasPermission('replies.update');
     }
 
@@ -34,8 +33,8 @@ class ReplyPolicy
 
         //if draft type is specified we should only
         //allow current user drafts to be deleted.
-        if ($type === 'drafts') {
-            return $reply->type === 'drafts' && $user->id == $reply->user_id;
+        if ($type === Reply::DRAFT_TYPE) {
+            return $reply->type === Reply::DRAFT_TYPE && $user->id == $reply->user_id;
         }
     }
 }

@@ -23,8 +23,6 @@ class TicketUpdated implements ShouldQueue
     public $originalTicket;
 
     /**
-     * Create a new event instance.
-     *
      * @param Ticket $updatedTicket
      * @param Ticket $originalTicket
      */
@@ -34,6 +32,11 @@ class TicketUpdated implements ShouldQueue
 
         //convert Ticket model to array, otherwise there might be
         //issues with original ticket data being updated by eloquent
-        $this->originalTicket = $originalTicket ? $originalTicket->toArray() : $updatedTicket->toArray();
+        $originalTicket = $originalTicket ? $originalTicket : $updatedTicket;
+
+        // TODO: move "status" to main ticket model instead of tags
+        $status = $originalTicket->status;
+        $this->originalTicket = $originalTicket->toArray();
+        $this->originalTicket['status'] = $status;
     }
 }

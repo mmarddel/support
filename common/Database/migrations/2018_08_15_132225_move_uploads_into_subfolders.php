@@ -17,7 +17,7 @@ class MoveUploadsIntoSubfolders extends Migration
 
         foreach ($drive->files() as $fileName) {
             $pathinfo = pathinfo($fileName);
-            if ( ! isset($pathinfo['extension']) && ! str_contains($fileName, '.')) {
+            if ( ! isset($pathinfo['extension']) && ! \Str::contains($fileName, '.')) {
                 $drive->createDir("$fileName-temp");
                 $drive->move($fileName, "$fileName-temp/$fileName");
                 $drive->rename("$fileName-temp", $fileName);

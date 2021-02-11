@@ -1,12 +1,13 @@
 <?php namespace Common\Billing\Gateways\Stripe;
 
+use App\User;
 use Carbon\Carbon;
 use Common\Billing\BillingPlan;
-use App\User;
-use Common\Billing\Subscription;
-use Omnipay\Stripe\Gateway;
 use Common\Billing\GatewayException;
 use Common\Billing\Gateways\Contracts\GatewaySubscriptionsInterface;
+use Common\Billing\Subscription;
+use LogicException;
+use Omnipay\Stripe\Gateway;
 
 class StripeSubscriptions implements GatewaySubscriptionsInterface
 {
@@ -16,8 +17,6 @@ class StripeSubscriptions implements GatewaySubscriptionsInterface
     private $gateway;
 
     /**
-     * StripeSubscriptions constructor.
-     *
      * @param Gateway $gateway
      */
     public function __construct(Gateway $gateway)
@@ -44,7 +43,8 @@ class StripeSubscriptions implements GatewaySubscriptionsInterface
         }
 
         return [
-            'renews_at' => Carbon::parse($response->getData()['current_period_end']),
+            'subscription' => $response->getData(),
+            'renews_at' => Carbon::createFromTimestamp($response->getData()['current_period_end']),
         ];
     }
 
@@ -60,25 +60,36 @@ class StripeSubscriptions implements GatewaySubscriptionsInterface
     public function create(BillingPlan $plan, User $user, $startDate = null)
     {
         if ($user->subscribedTo($plan, 'stripe')) {
-            throw new \LogicException("User already subscribed to '{$plan->name}' plan.");
+            throw new LogicException("User already subscribed to '{$plan->name}' plan.");
         }
 
         $request = $this->gateway->createSubscription([
             'customerReference' => $user->stripe_id,
             'plan' => $plan->uuid,
         ]);
-
-        $data = $request->getData();
-        $data['trial_end'] = $startDate ? Carbon::parse($startDate)->getTimestamp() : 'now';
-        $response = $request->sendData($data);
+        $response = $request->sendData(array_merge(
+            $request->getData(),
+            [
+                'trial_end' => $startDate ? Carbon::parse($startDate)->getTimestamp() : 'now',
+                'expand' => ['latest_invoice.payment_intent'],
+            ]
+        ));
 
         if ( ! $response->isSuccessful()) {
             throw new GatewayException("Stripe subscription creation failed: {$response->getMessage()}");
         }
 
+        if ($response->getData()['latest_invoice']['payment_intent']['status'] === 'requires_action') {
+            $status = 'requires_action';
+        } else {
+            $status = 'complete';
+        }
+
         return [
+            'status' => $status,
+            'payment_intent_secret' => $response->getData()['latest_invoice']['payment_intent']['client_secret'],
             'reference' => $response->getSubscriptionReference(),
-            'end_date' => $response->getData()['current_period_end']
+            'end_date' => $response->getData()['current_period_end'],
         ];
     }
 
@@ -92,11 +103,24 @@ class StripeSubscriptions implements GatewaySubscriptionsInterface
      */
     public function cancel(Subscription $subscription, $atPeriodEnd = true)
     {
-        $response = $this->gateway->cancelSubscription([
-            'subscriptionReference' => $subscription->gateway_id,
-            'customerReference' => $subscription->user->stripe_id,
-            'at_period_end' => $atPeriodEnd,
-        ])->send();
+        // cancel subscription at current period end and don't delete
+        if ($atPeriodEnd) {
+            $request = $this->gateway->updateSubscription([
+                'subscriptionReference' => $subscription->gateway_id,
+                'customerReference' => $subscription->user->stripe_id,
+                'plan' => $subscription->plan->uuid,
+            ]);
+            $response = $request->sendData(array_merge(
+                $request->getData(),
+                ['cancel_at_period_end' => 'true']
+            ));
+        // cancel and delete subscription instantly
+        } else {
+            $response = $this->gateway->cancelSubscription([
+                'subscriptionReference' => $subscription->gateway_id,
+                'customerReference' => $subscription->user->stripe_id,
+            ])->send();
+        }
 
         if ( ! $response->isSuccessful()) {
             throw new GatewayException("Stripe subscription cancel failed: {$response->getMessage()}");
@@ -138,11 +162,16 @@ class StripeSubscriptions implements GatewaySubscriptionsInterface
      */
     public function changePlan(Subscription $subscription, BillingPlan $newPlan)
     {
-        $response = $this->gateway->updateSubscription([
+        $request = $this->gateway->updateSubscription([
             'plan' => $newPlan->uuid,
             'customerReference' => $subscription->user->stripe_id,
             'subscriptionReference' => $subscription->gateway_id,
-        ])->send();
+        ]);
+
+        $response = $request->sendData(array_merge(
+            $request->getData(),
+            ['proration_behavior' => 'always_invoice']
+        ));
 
         if ( ! $response->isSuccessful()) {
             throw new GatewayException("Stripe subscription plan change failed: {$response->getMessage()}");

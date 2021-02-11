@@ -2,6 +2,7 @@
 
 namespace Common\Tags;
 
+use Carbon\Carbon;
 use Common\Files\FileEntry;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\MorphToMany;
@@ -12,6 +13,8 @@ class Tag extends Model
     protected $hidden = ['pivot'];
     protected $guarded = ['id'];
     protected $casts = ['id' => 'integer'];
+
+    const DEFAULT_TYPE = 'default';
 
     /**
      * @return MorphToMany
@@ -52,36 +55,61 @@ class Tag extends Model
     }
 
     /**
-     * @param Collection $tags
+     * @param Collection|array $tags
+     * @param string $type
      * @return Collection|Tag[]
      */
-    public function insertOrRetrieve(Collection $tags)
+    public function insertOrRetrieve($tags, $type = 'custom')
     {
-        $tags = $tags->toLower('name');
-        $existing = $this->getByNames($tags->pluck('name'), $tags->first()['type']);
+        if ( ! $tags instanceof Collection) {
+            $tags = collect($tags);
+        }
+
+        $tags = $tags->filter();
+
+        if (is_string($tags->first())) {
+            $tags = $tags->map(function($tag) {
+                return ['name' => $tag];
+            });
+        }
+
+        $existing = $this->getByNames($tags->pluck('name'), $type);
 
         $new = $tags->filter(function($tag) use($existing) {
-            return !$existing->contains('name', strtolower($tag['name']));
+            return !$existing->first(function($existingTag) use($tag) {
+                return slugify($existingTag['name']) === slugify($tag['name']);
+            });
         });
 
         if ($new->isNotEmpty()) {
+            $new->transform(function($tag) use($type) {
+                $tag['created_at'] = Carbon::now();
+                $tag['updated_at'] = Carbon::now();
+                $tag['type'] = $type;
+                return $tag;
+            });
             $this->insert($new->toArray());
-            return $this->getByNames($tags->pluck('name'), $tags->first()['type']);
+            return $this->getByNames($tags->pluck('name'), $type);
         } else {
             return $existing;
         }
     }
 
     /**
-     * @param Collection $names
+     * @param Collection|string[] $names
      * @param string $type
      * @return Collection
      */
     public function getByNames(Collection $names, $type = null)
     {
+        // don't try to slugify or lowercase tag names
+        // as that will cause duplicate tags in many cases.
+        // for example "action & adventure" and "action adventure"
         $query = $this->whereIn('name', $names);
-        if ($type) $query->where('type', $type);
-        return $query->get()->toLower('name');
+        if ($type) {
+            $query->where('type', $type);
+        }
+        return $query->get();
     }
 
     /**

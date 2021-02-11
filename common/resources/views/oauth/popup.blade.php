@@ -12,6 +12,6 @@
         @endif
     @endif
 
-    window.opener.postMessage({status: status, callbackData: data}, '*');
+    window.opener.postMessage({status: status, callbackData: data, type: 'social-auth'}, '*');
     window.close();
 </script>

@@ -12,9 +12,11 @@ class CreateTagsTable extends Migration
      */
     public function up()
     {
+        if (Schema::hasTable('tags')) return;
+
         Schema::create('tags', function (Blueprint $table) {
             $table->increments('id');
-            $table->string('name')->unique();
+            $table->string('name')->index()->unique();
             $table->string('display_name')->nullable();
             $table->string('type', 30)->index()->default('custom');
             $table->timestamps();

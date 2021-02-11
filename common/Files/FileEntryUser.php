@@ -2,6 +2,7 @@
 
 namespace Common\Files;
 
+use App\User;
 use Common\Auth\BaseUser;
 
 /**
@@ -14,12 +15,9 @@ class FileEntryUser extends BaseUser
 
     protected $billingEnabled = false;
 
-    public function __construct(array $attributes = [])
+    public function getMorphClass()
     {
-        parent::__construct($attributes);
-
-        // don't load user subscriptions
-        $this->with = [];
+        return User::class;
     }
 
     protected $hidden = [

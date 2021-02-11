@@ -1,71 +1,66 @@
 <?php namespace Common\Settings;
 
-use Dotenv\Loader;
+use Dotenv\Dotenv;
+use Dotenv\Repository\AdapterRepository;
+use Str;
 
-class DotEnvEditor extends Loader
+class DotEnvEditor
 {
-    /**
-     * EnvLoader constructor.
-     *
-     * @param string $fileName
-     */
-    public function __construct($fileName = '.env')
-    {
-        parent::__construct(base_path($fileName), true);
-    }
-
     /**
      * Load values from .env file
      *
      * @param string|null $path
+     * @param string $fileName
      * @return array
      */
-    public function load($path = null)
+    public function load($fileName = '.env', $path = null)
     {
-        $this->ensureFileIsReadable();
+        $path = $path ?: base_path();
+        $dotEnv = Dotenv::create(new AdapterRepository([], [], true), [$path], $fileName);
+        $values = $dotEnv->load();
+        $lowercaseValues = [];
 
-        $filePath = $path ?: $this->filePath;
-
-        $lines = $this->readLinesFromFile($filePath);
-        $env = [];
-
-        foreach ($lines as $line) {
-            if ( ! $this->isComment($line) && $this->looksLikeSetter($line)) {
-                list($key, $value) = $this->normaliseEnvironmentVariable($line, null);
-                $env[strtolower($key)] = $value === 'null' ? null : $value;
+        foreach ($values as $key => $value) {
+            if (strtolower($value) === 'null') {
+                $lowercaseValues[strtolower($key)] = null;
+            } else if (strtolower($value) === 'false') {
+                $lowercaseValues[strtolower($key)] = false;
+            } else if (strtolower($value) === 'true') {
+                $lowercaseValues[strtolower($key)] = true;
+            } else if (preg_match('/\A([\'"])(.*)\1\z/', $value, $matches)) {
+                $lowercaseValues[strtolower($key)] = $matches[2];
+            } else {
+                $lowercaseValues[strtolower($key)] = $value;
             }
         }
 
-        return $env;
+        return $lowercaseValues;
     }
 
     /**
      * Write specified settings to .env file.
      *
      * @param array $values
-     *
+     * @param string $fileName
      * @return void
      */
-    public function write($values = [])
+    public function write($values = [], $fileName = '.env')
     {
-        $this->ensureFileIsReadable();
-
-        $content = file_get_contents($this->filePath);
+        $content = file_get_contents(base_path($fileName));
 
         foreach ($values as $key => $value) {
             $value = $this->formatValue($value);
-
             $key = strtoupper($key);
 
-            if (str_contains($content, $key.'=')) {
+            if (Str::contains($content, $key.'=')) {
                 preg_match("/($key=)(.*?)(\n|\Z)/msi", $content, $matches);
                 $content = str_replace($matches[1].$matches[2], $matches[1].$value, $content);
             } else {
-                $content .= "\n\n$key=$value";
+                $content .= "\n$key=$value";
             }
         }
 
-        file_put_contents($this->filePath, $content);
+        file_put_contents(base_path($fileName), $content);
     }
 
     /**
@@ -76,10 +71,13 @@ class DotEnvEditor extends Loader
      */
     private function formatValue($value)
     {
+        if ($value === 0 || $value === false) $value = 'false';
+        if ($value === 1 || $value === true) $value = 'true';
         if ( ! $value) $value = 'null';
+        $value = trim($value);
 
-        //wrap string in quotes, if it contains whitespace
-        if (preg_match('/\s/', $value)) {
+        // wrap string in quotes, if it contains whitespace or special characters
+        if (preg_match('/\s/', $value) || Str::contains($value, '#')) {
             //replace double quotes with single quotes
             $value = str_replace('"', "'", $value);
 

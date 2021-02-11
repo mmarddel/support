@@ -2,14 +2,15 @@
 
 use Closure;
 use Common\Core\Controllers\HomeController;
-use Illuminate\View\View;
 use Illuminate\Http\Request;
+use Illuminate\View\View;
 
 class PrerenderIfCrawler
 {
     protected $crawlerUserAgents = [
-        'yahoo',
+        'Yahoo! Slurp',
         'bingbot',
+        'yandex',
         'baiduspider',
         'facebookexternalhit',
         'twitterbot',
@@ -19,10 +20,24 @@ class PrerenderIfCrawler
         'quora link preview',
         'showyoubot',
         'outbrain',
-        'pinterest',
-        'developers.google.com/+/web/snippet',
+        'pinterest/0.',
         'slackbot',
-        'YandexBot'
+        'vkShare',
+        'W3C_Validator',
+        'redditbot',
+        'Applebot',
+        'WhatsApp',
+        'flipboard',
+        'tumblr',
+        'bitlybot',
+        'SkypeUriPreview',
+        'nuzzel',
+        'Discordbot',
+        'Qwantify',
+        'pinterestbot',
+        'Bitrix link preview',
+        'XING-contenttabreceiver',
+        'developers.google.com/+/web/snippet',
     ];
 
     /**
@@ -30,16 +45,21 @@ class PrerenderIfCrawler
      *
      * @param Request $request
      * @param Closure $next
+     * @param string $routeName
      * @return Request|View
      */
-    public function handle(Request $request, Closure $next)
+    public function handle(Request $request, Closure $next, $routeName = null)
     {
         if ($this->shouldPrerender($request)) {
             define('SHOULD_PRERENDER', true);
-            return $next($request);
-        } else {
+
+        // Always fallback to client routes if not prerendering
+        // otherwise prerender routes will override client side routing
+        } else if ($routeName !== 'homepage') {
             return app(HomeController::class)->show();
         }
+
+        return $next($request);
     }
 
     /**
@@ -63,7 +83,7 @@ class PrerenderIfCrawler
 
         // prerender if a crawler is detected
         foreach ($this->crawlerUserAgents as $crawlerUserAgent) {
-            if (str_contains($userAgent, strtolower($crawlerUserAgent))) {
+            if (\Str::contains($userAgent, strtolower($crawlerUserAgent))) {
                 $shouldPrerender = true;
             }
         }

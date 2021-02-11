@@ -2,9 +2,9 @@
 
 use App\User;
 use Illuminate\Http\Request;
-use Common\Core\Controller;
+use Common\Core\BaseController;
 
-class UserDetailsController extends Controller
+class UserDetailsController extends BaseController
 {
     /**
      * @var Request

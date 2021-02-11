@@ -2,113 +2,108 @@
 
 namespace Common\Core\Policies;
 
-use Common\Auth\BaseUser;
+use App\User;
+use Arr;
 use Common\Files\FileEntry;
-use Illuminate\Support\Arr;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Database\Eloquent\Relations\MorphToMany;
+use Illuminate\Support\Collection;
 use Request;
 
 class FileEntryPolicy
 {
     use HandlesAuthorization;
 
-    /**
-     * Check if current user can view specified entries.
-     *
-     * @param BaseUser $user
-     * @param array $entryIds
-     * @param int $userId
-     * @return bool
-     */
-    public function index(BaseUser $user, array $entryIds = null, $userId = null)
+    public function index(User $user, array $entryIds = null, int $userId = null): bool
     {
-        // user has permissions to view all entries
-        if ($user->hasPermission('files.view')) {
-            return true;
+        if ($entryIds) {
+            return $this->userCan($user, 'files.view', $entryIds);
+        } else {
+            return $user->hasPermission('files.view') || $userId === $user->id;
         }
-
-        // check if all entries of specified user can be viewed
-        if ( ! $entryIds && (int) $userId === $user->id) {
-            return true;
-        }
-
-        // check if specific entries can be viewed by user
-        return $this->userHasPermission($user, 'view', $entryIds);
     }
 
-    public function show(BaseUser $user, FileEntry $entry)
+    public function show(User $user, FileEntry $entry): bool
     {
         // allow access via preview token
         if ($entry->preview_token && $entry->preview_token === Request::get('preview_token')) {
             return true;
         }
 
-        return $user->hasPermission('files.view') || $this->userHasPermission($user, 'view', [$entry->id]);
+        return $this->userCan($user, 'files.view', [$entry->id]);
     }
 
-    /**
-     * Check if user can create entry.
-     *
-     * @param BaseUser $user
-     * @param int $parentId
-     * @return bool
-     */
-    public function store(BaseUser $user, $parentId = null)
+    public function store(User $user, int $parentId = null): bool
     {
+
         //check if user can modify parent entry (if specified)
         if ($parentId) {
-            return $this->userHasPermission($user, 'edit', [$parentId]);
+            return $this->userCan($user, 'files.update', [$parentId]);
         }
 
         return $user->hasPermission('files.create');
     }
 
-    public function update(BaseUser $user, array $entryIds)
+    public function update(User $user, array $entryIds)
     {
-        return $user->hasPermission('files.update') || $this->userHasPermission($user, 'edit', $entryIds);
+        return $this->userCan($user, 'files.update', $entryIds);
     }
 
-    public function destroy(BaseUser $user, array $entryIds)
+    public function destroy(User $currentUser, array $entryIds)
     {
-        if ( ! $entryIds || $user->hasPermission('files.delete')) {
+        return $this->userCan($currentUser, 'files.delete', $entryIds);
+    }
+
+    /**
+     * @param User $currentUser
+     * @param string $permission
+     * @param array|Collection $entries
+     * @return bool
+     */
+    protected function userCan(User $currentUser, string $permission, $entries)
+    {
+        if ($currentUser->hasPermission($permission)) {
             return true;
         }
 
-        //check if user owns all of the specified entries
-        $count = $user->entries()
-            ->withTrashed()
-            ->whereIn('file_entries.id', $entryIds)
-            ->wherePivot('owner', true)
-            ->count();
+        $entries = $this->findEntries($entries);
 
-        return $count === count($entryIds);
+        // extending class might use "findEntries" method so we load users here
+        $entries->load(['users' => function (MorphToMany $builder) use($currentUser) {
+            $builder->where('users.id', $currentUser->id);
+        }]);
+
+        return $entries->every(function(FileEntry $entry) use($permission) {
+            $user = $entry->users->first();
+            // user owns entry or was granted specified permission by file owner
+            return $user && ($user->owns_entry || Arr::get($user->entry_permissions, $this->sharedFilePermission($permission)));
+        });
     }
 
-    private function userHasPermission(BaseUser $user, $permission, $entryIds)
+    /**
+     * @param array|Collection $entries
+     * @return Collection
+     */
+    protected function findEntries($entries)
     {
-        if ( ! $entryIds) $entryIds = [];
-        
-        // check if user has edit permissions for all specified entries
-        $entries = $user->entries()
-            ->withPivot(['owner', 'permissions'])
-            ->whereIn('file_entries.id', $entryIds)
-            ->get();
+        if (is_array($entries)) {
+            return app(FileEntry::class)
+                ->whereIn('id', $entries)
+                ->get();
+        } else {
+            return $entries;
+        }
+    }
 
-        $entriesUserHasPermissionsFor = count(array_filter($entryIds, function($entryId) use($entries, $permission) {
-            $entry = $entries->find($entryId);
-
-            //user has no access to this entry at all
-            if ( ! $entry) return false;
-
-            //user is the owner of this entry
-            if ($entry->pivot->owner) return true;
-
-            // user was granted specified permission by file owner
-            return Arr::get($entry->pivot->permissions, $permission);
-        }));
-
-        $allEntries = count($entryIds);
-
-        return $entriesUserHasPermissionsFor === $allEntries;
+    protected function sharedFilePermission($fullPermission): string
+    {
+        switch ($fullPermission) {
+            case 'files.view':
+                return 'view';
+            case 'files.update':
+                return 'edit';
+            case 'files.delete';
+                return 'delete';
+        }
     }
 }

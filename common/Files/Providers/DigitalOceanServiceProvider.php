@@ -3,6 +3,7 @@
 namespace Common\Files\Providers;
 
 use Aws\S3\S3Client;
+use Illuminate\Support\Arr;
 use League\Flysystem\AwsS3v3\AwsS3Adapter;
 use Storage;
 use League\Flysystem\Filesystem;
@@ -30,9 +31,14 @@ class DigitalOceanServiceProvider extends ServiceProvider
                 'endpoint' => "https://$region.digitaloceanspaces.com",
             ]);
 
-            $adapter = new AwsS3Adapter($client, $config['bucket']);
+            $root = isset($config['root']) ? $config['root'] : null;
 
-            return new Filesystem($adapter);
+            $options = isset($config['options']) ? $config['options'] : [];
+
+            $adapter = new AwsS3Adapter($client, $config['bucket'], $root, $options);
+
+            $flysystemConfig = Arr::only($config, ['visibility', 'disable_asserts', 'url']);
+            return new Filesystem($adapter, count($flysystemConfig) > 0 ? $flysystemConfig : null);
         });
     }
 

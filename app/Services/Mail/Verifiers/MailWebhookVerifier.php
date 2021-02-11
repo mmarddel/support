@@ -2,9 +2,8 @@
 
 use App;
 use Common\Settings\Settings;
-use Illuminate\Support\Str;
+use Str;
 use InvalidArgumentException;
-use App\Services\Mail\Verifiers\MailWebhookVerifierInterface;
 
 class MailWebhookVerifier
 {

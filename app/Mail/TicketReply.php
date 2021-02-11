@@ -1,25 +1,21 @@
 <?php namespace App\Mail;
 
 use App;
-use Common\Files\FileEntry;
-use Common\Mail\MailTemplates;
-use Storage;
 use App\Reply;
+use App\Services\Mail\TicketReferenceHash;
 use App\Ticket;
-use Swift_Message;
+use Common\Files\FileEntry;
 use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Mail\Mailable;
 use Illuminate\Queue\SerializesModels;
-use App\Services\Mail\TicketReferenceHash;
-use Illuminate\Contracts\Queue\ShouldQueue;
+use Swift_Message;
 
 class TicketReply extends Mailable implements ShouldQueue
 {
     use Queueable, SerializesModels;
 
     /**
-     * Ticket model instance.
-     *
      * @var Ticket
      */
     public $ticket;
@@ -35,8 +31,6 @@ class TicketReply extends Mailable implements ShouldQueue
     public $reference;
 
     /**
-     * TicketReply constructor.
-     *
      * @param Ticket $ticket
      * @param Reply $reply
      */
@@ -48,20 +42,14 @@ class TicketReply extends Mailable implements ShouldQueue
     }
 
     /**
-     * Build the message.
-     *
      * @return $this
      */
     public function build()
     {
-        $template = App::make(MailTemplates::class)->getByAction('ticket_reply', [
-            'ticket_subject' => $this->ticket->subject
-        ]);
-
         $this->to($this->ticket->user->email)
-             ->subject($template['subject'])
-             ->view($template['html_view'])
-             ->text($template['plain_view']);
+             ->subject("RE: {$this->ticket->subject}")
+             ->view('tickets.ticket-reply.ticket-reply')
+             ->text('tickets.ticket-reply.ticket-reply-plain');
 
         $this->addHeaders();
         $this->addAttachments();

@@ -1,12 +1,14 @@
 <?php
 
-define('MINIMUM_VERSION', '5.6.4');
+define('MINIMUM_VERSION', '7.2.5');
 if ( ! version_compare(PHP_VERSION, MINIMUM_VERSION)) exit('You need at least PHP '.MINIMUM_VERSION.' to install this application.');
 
 /*
  * Check for JSON extension
  */
-if (!function_exists('json_decode')) exit('JSON PHP Extension is required to install MTDb');
+if (!function_exists('json_decode')) {
+    exit('JSON PHP Extension is required in order to install. You should be able to enable it from cpanel in most cases.');
+}
 
 /*
  * PHP headers
@@ -24,6 +26,7 @@ $isDebug = array_key_exists('debug', $_REQUEST);
 
 if ($isDebug) {
     ini_set('display_errors', 1);
+    ini_set('display_startup_errors', 1);
     error_reporting(1);
 }
 else {
@@ -40,6 +43,7 @@ define('PATH_INSTALL', str_replace("\\", "/", realpath(dirname(__FILE__)."/../..
  * Address timeout limits
  */
 @set_time_limit(3600);
+@ini_set('memory_limit', '-1');
 
 /*
  * Prevent PCRE engine from crashing
@@ -54,7 +58,7 @@ function installerShutdown()
 {
     global $installer;
     $error = error_get_last();
-    if ($error['type'] == 1) {
+    if (isset($error['type']) && $error['type'] == 1) {
         header('HTTP/1.1 500 Internal Server Error');
         $errorMsg = htmlspecialchars_decode(strip_tags($error['message']));
         echo $errorMsg;
@@ -73,7 +77,7 @@ require_once 'Installer.php';
 
 try {
     $installer = new Installer();
-    $installer->cleanLog();
+    $installer->startNewLogSection();
     $installer->log('Host: %s', php_uname());
     $installer->log('PHP version: %s', PHP_VERSION);
     $installer->log('Server software: %s', isset($_SERVER['SERVER_SOFTWARE']) ? $_SERVER['SERVER_SOFTWARE'] : 'Unknown');

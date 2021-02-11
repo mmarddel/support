@@ -4,8 +4,8 @@ namespace Common\Settings\Validators;
 
 use Config;
 use Exception;
-use Google_Auth_Exception;
-use Illuminate\Support\Arr;
+use Arr;
+Use Str;
 use Google_Service_Exception;
 use Common\Admin\Analytics\Actions\GetGoogleAnalyticsData;
 
@@ -18,7 +18,7 @@ class AnalyticsCredentialsValidator
         $this->setConfigDynamically($settings);
 
         try {
-            app(GetGoogleAnalyticsData::class)->execute();
+            app(GetGoogleAnalyticsData::class)->execute(null);
         } catch (Exception $e) {
             return $this->getErrorMessage($e);
         }
@@ -27,11 +27,7 @@ class AnalyticsCredentialsValidator
     private function setConfigDynamically($settings)
     {
         if ($viewId = Arr::get($settings, 'analytics_view_id')) {
-            Config::set('laravel-analytics.siteId', "ga:$viewId");
-        }
-
-        if ($serviceEmail = Arr::get($settings, 'analytics_service_email')) {
-            Config::set('laravel-analytics.serviceEmail', $serviceEmail);
+            Config::set('analytics.view_id', $viewId);
         }
     }
 
@@ -43,8 +39,8 @@ class AnalyticsCredentialsValidator
     {
         if ($e instanceof Google_Service_Exception) {
             $message = Arr::get($e->getErrors(), '0.message');
-        } else if (str_contains($e->getMessage(), "Can't find the .p12 certificate")) {
-            return ['certificate' => 'Private key file is required and has not been uploaded yet.'];
+        } else if (Str::contains($e->getMessage(), "Could not find a credentials file at")) {
+            return ['certificate' => 'Google Service Account Key File is required and has not been uploaded yet.'];
         } else {
             $message = $e->getMessage();
         }

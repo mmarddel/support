@@ -4,11 +4,11 @@ namespace App\Policies;
 
 use App\Reply;
 use App\Ticket;
-use Common\Auth\BaseUser;
+use App\User;
 use Common\Core\Policies\FileEntryPolicy;
 use Common\Files\FileEntry;
-use Illuminate\Http\Request;
 use Illuminate\Auth\Access\HandlesAuthorization;
+use Illuminate\Http\Request;
 
 class TicketFileEntryPolicy extends FileEntryPolicy
 {
@@ -38,7 +38,7 @@ class TicketFileEntryPolicy extends FileEntryPolicy
         $this->reply = $reply;
     }
 
-    public function show(BaseUser $user, FileEntry $entry, Reply $reply = null)
+    public function show(User $user, FileEntry $entry, Reply $reply = null): bool
     {
         // user can view this file, if file is attached to user's ticket
         if ($this->request->get('ticketEntry')) {
@@ -65,7 +65,7 @@ class TicketFileEntryPolicy extends FileEntryPolicy
     private function getReplyForRequest(Reply $reply = null) {
         if ($reply) return $reply;
 
-        if ($this->request->has('replyId')) {
+        if ($this->request->filled('replyId')) {
             return $this->reply->findOrFail($this->request->get('shareable_link'));
         }
 

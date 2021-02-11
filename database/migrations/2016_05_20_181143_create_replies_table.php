@@ -1,5 +1,6 @@
 <?php
 
+use App\Reply;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Database\Migrations\Migration;
 
@@ -17,7 +18,7 @@ class CreateRepliesTable extends Migration
             $table->text('body');
             $table->integer('user_id')->index();
             $table->integer('ticket_id')->index();
-            $table->string('type')->default('replies')->index();
+            $table->string('type')->default(Reply::REPLY_TYPE)->index();
             $table->string('uuid', 30)->index();
             $table->timestamps();
 

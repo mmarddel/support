@@ -1,8 +1,9 @@
 <?php namespace Common\Settings;
 
 use Cache;
+use Carbon\Carbon;
 use Exception;
-use Illuminate\Support\Arr;
+use Arr;
 use Illuminate\Support\Collection;
 
 class Settings {
@@ -19,12 +20,19 @@ class Settings {
      * @var array
      */
     private $configKeys = [
-//        'billing.stripe_public_key' => 'services.stripe.key',
-//        'common.site.demo' => 'common.site.demo',
-//        'logging.sentry_public' => 'sentry.dsn',
-//        'i18n.default_localization' => 'app.locale',
-//        'billing.integrated' => 'common.site.billing_integrated',
+        'billing.stripe_public_key' => 'services.stripe.key',
+        'common.site.demo' => 'common.site.demo',
+        'logging.sentry_public' => 'sentry.dsn',
+        'i18n.default_localization' => 'app.locale',
+        'billing.integrated' => 'common.site.billing_integrated',
+        'workspaces.integrated' => 'common.site.workspaces_integrated',
+        'notifications.integrated' => 'common.site.notifications_integrated',
+        'notif.subs.integrated' => 'common.site.notif_subs_integrated',
+        'api.integrated' => 'common.site.api_integrated',
         'branding.site_name' => 'app.name',
+        'realtime.pusher_cluster' => 'broadcasting.connections.pusher.options.cluster',
+        'realtime.pusher_key' => 'broadcasting.connections.pusher.key',
+        'site.hide_docs_buttons' => 'common.site.hide_docs_buttons',
     ];
 
     /**
@@ -164,7 +172,7 @@ class Settings {
      */
     private function loadSettings()
     {
-        $this->all = Cache::remember('settings.public', 1440, function() {
+        $this->all = Cache::remember('settings.public', Carbon::now()->addDay(), function() {
             try {
                 return Setting::select(['name', 'value', 'private'])->get()->mapWithKeys(function(Setting $setting) {
                     return [$setting->name => $setting->toArray()];

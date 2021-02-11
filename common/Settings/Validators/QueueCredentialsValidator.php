@@ -21,7 +21,6 @@ class QueueCredentialsValidator
         $this->setConfigDynamically($settings);
 
         $driver = Arr::get($settings, 'queue_driver', config('queue.default'));
-
         try {
             Queue::connection($driver)->size();
         } catch (Exception $e) {
@@ -36,6 +35,7 @@ class QueueCredentialsValidator
             $key = strtolower(str_replace('_', '.', $key));
             // sqs.queue.key => sqs.key
             $key = str_replace('queue.', '', $key);
+            $key = str_replace('name', 'queue', $key);
             Config::set("queue.connections.$key", $value);
         }
     }

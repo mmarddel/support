@@ -1,14 +1,19 @@
 <?php namespace App\Http\Controllers;
 
+use App\Events\TicketCreated;
 use App\Events\TicketUpdated;
+use App\Services\Ticketing\Actions\PaginateTickets;
+use App\Services\Ticketing\TicketRepository;
 use App\Ticket;
-use Common\Core\Controller;
+use Auth;
+use Common\Core\BaseController;
+use DB;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Query\JoinClause;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use App\Services\Ticketing\TicketRepository;
-use App\Events\TicketCreated;
 
-class TicketController extends Controller
+class TicketController extends BaseController
 {
     /**
      * @var Request
@@ -31,20 +36,18 @@ class TicketController extends Controller
     }
 
     /**
-     * Return a list of tickets.
-     *
      * @return JsonResponse
      */
     public function index()
     {
-        $this->authorize('index', Ticket::class);
+        $this->authorize('index', [Ticket::class, $this->request->get('userId')]);
 
         $this->validate($this->request, [
             'tags'        => 'string|min:1',
             'assigned_to' => 'integer',
         ]);
 
-        $pagination = $this->ticketRepository->paginateTickets($this->request->all());
+        $pagination = app(PaginateTickets::class)->execute($this->request->all());
 
         return $this->success(['pagination' => $pagination]);
     }
@@ -67,7 +70,7 @@ class TicketController extends Controller
     }
 
     /**
-     * @return Ticket
+     * @return mixed
      */
     public function store()
     {
@@ -76,9 +79,9 @@ class TicketController extends Controller
         $this->validate($this->request, [
             'user_id'       => 'integer|exists:users,id',
             'subject'       => 'required|min:3|max:255',
-            'category'      => 'required|integer|min:1',
+            'category'      => 'required|integer|min:1|envatoSupportActive',
             'body'          => 'required|min:3',
-            'uploads'       => 'array|max:5|exists:file_entries,id',
+            'uploads'       => 'array|max:10|exists:file_entries,id',
             'tags'          => 'array|min:1|max:10',
             'tags.*'        => 'integer|min:1',
         ]);
@@ -113,9 +116,6 @@ class TicketController extends Controller
         return $this->success(['ticket' => $ticket]);
     }
 
-    /**
-     * Delete tickets matching given ids.
-     */
     public function destroy()
     {
         $this->authorize('destroy', Ticket::class);
@@ -128,5 +128,31 @@ class TicketController extends Controller
         $this->ticketRepository->deleteTickets($this->request->get('ids'));
 
         return $this->success([], 204);
+    }
+
+    public function nextActiveTicket($tagId): JsonResponse
+    {
+        $this->authorize('index', Ticket::class);
+
+        $query = app(Ticket::class)
+            ->join('taggables', 'taggables.taggable_id', '=', 'tickets.id')
+            ->where('taggables.taggable_type', Ticket::class)
+            ->join('tags', function(JoinClause $join) {
+                $join->on('tags.id', '=', 'taggables.tag_id');
+                $join->on('tags.type', '=', DB::raw("'status'"));
+            })->select('tickets.*', 'tags.name as status')
+            ->where(function(Builder $builder) {
+                $builder->whereNull('assigned_to')->orWhere('assigned_to', Auth::id());
+            });
+
+        if ($tagId !== 'closed') {
+            $query->whereNull('closed_at');
+        }
+
+        app(PaginateTickets::class)->filterByTag($tagId, $query);
+
+        $ticket = $query->orderByStatus()->first();
+
+        return $this->success(['ticket' => $ticket]);
     }
 }

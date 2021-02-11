@@ -1,12 +1,15 @@
 <?php namespace App\Http\Controllers;
 
 use App\Tag;
+use App\User;
+use Arr;
+use Auth;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use App\Services\Envato\EnvatoApiClient;
-use Illuminate\Database\Eloquent\Collection;
-use Common\Core\Controller;
+use Common\Core\BaseController;
 
-class EnvatoController extends Controller
+class EnvatoController extends BaseController
 {
     /**
      * Request instance.
@@ -46,7 +49,7 @@ class EnvatoController extends Controller
     /**
      * Validate specified envato purchase code.
      *
-     * @return Collection
+     * @return JsonResponse
      */
     public function validateCode()
     {
@@ -55,8 +58,24 @@ class EnvatoController extends Controller
         if ($r = $this->envatoClient->purchaseCodeIsValid($code)) {
             return $this->success(['data' => $r]);
         } else {
-            return $this->error(['purchase_code' => 'This purchase code is not valid.']);
+            return $this->error(__('This purchase code is not valid.'));
         }
+    }
+
+    public function addPurchaseUsingCode(): JsonResponse
+    {
+        $this->validate($this->request, [
+            'purchase_code' => 'required|string'
+        ]);
+
+        $envatoPurchase = $this->envatoClient->getPurchaseByCode($this->request->get('purchase_code'));
+        if ( ! $envatoPurchase) {
+            return $this->error(__('Could not find purchase with that code.'));
+        }
+
+        $purchase = Auth::user()->updatePurchases([$envatoPurchase], Arr::get($envatoPurchase, 'buyer'))[0];
+
+        return $this->success(['purchase' => $purchase]);
     }
 
     /**

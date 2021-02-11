@@ -2,9 +2,9 @@
 
 namespace App\Http\Middleware;
 
-use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken as BaseVerifier;
+use Common\Core\BaseVerifyCsrfToken;
 
-class VerifyCsrfToken extends BaseVerifier
+class VerifyCsrfToken extends BaseVerifyCsrfToken
 {
     /**
      * The URIs that should be excluded from CSRF verification.
@@ -12,6 +12,8 @@ class VerifyCsrfToken extends BaseVerifier
      * @var array
      */
     protected $except = [
+        'update',
+        'secure/update/run',
         'secure/auth/login',
         'secure/auth/register',
         'secure/auth/logout',

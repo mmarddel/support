@@ -3,9 +3,9 @@
 use DB;
 use App\Category;
 use Illuminate\Http\Request;
-use Common\Core\Controller;
+use Common\Core\BaseController;
 
-class CategoriesOrderController extends Controller
+class CategoriesOrderController extends BaseController
 {
     /**
      * @var Request

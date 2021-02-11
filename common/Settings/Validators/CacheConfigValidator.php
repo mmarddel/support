@@ -3,6 +3,8 @@
 namespace Common\Settings\Validators;
 
 use Cache;
+use Carbon\Carbon;
+use Common\Settings\DotEnvEditor;
 use Exception;
 use Throwable;
 use Illuminate\Support\Arr;
@@ -13,10 +15,12 @@ class CacheConfigValidator
 
     public function fails($settings)
     {
+        $this->setConfigDynamically($settings);
+
         try {
             $driverName = Arr::get($settings, 'cache_driver', config('cache.default'));
             $driver = Cache::driver($driverName);
-            $driver->put('foo', 'bar');
+            $driver->put('foo', 'bar', 1);
             if ($driver->get('foo') !== 'bar') {
                 return $this->getDefaultErrorMessage();
             }
@@ -27,6 +31,11 @@ class CacheConfigValidator
         }
     }
 
+    private function setConfigDynamically($settings)
+    {
+        app(DotEnvEditor::class)->write(Arr::except($settings, ['cache_driver']));
+    }
+
     /**
      * @param Exception|Throwable $e
      * @return array
@@ -35,11 +44,11 @@ class CacheConfigValidator
     {
         $message = $e->getMessage();
 
-        if (str_contains($message, 'apc_fetch')) {
-            return ['cache_group' => 'PHP APC module needs to be enabled before "apc" cache method can be used.'];
-        } else if (str_contains($message, 'Memcached')) {
-            return ['cache_group' => 'PHP Memcached extension needs to be enabled before "memcached" cache method can be used.'];
-        } else if (str_contains($message, 'Connection refused')) {
+        if (\Str::contains($message, 'apc_fetch')) {
+            return ['cache_group' => "Could not enable APC. $message"];
+        } else if (\Str::contains($message, 'Memcached')) {
+            return ['cache_group' => "Could not enable Memcached. $message"];
+        } else if (\Str::contains($message, 'Connection refused')) {
             return ['cache_group' => 'Could not connect to redis server.'];
         } else {
             return $this->getDefaultErrorMessage();

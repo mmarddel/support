@@ -2,13 +2,13 @@
 
 use App\Services\HelpCenter\AddIdToAllHtmlHeadings;
 use Carbon\Carbon;
+use Common\Files\FileEntry;
 use DB;
 use Eloquent;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphToMany;
-use Illuminate\Support\Arr;
 use Laravel\Scout\Searchable;
 use App\Traits\OrdersByPosition;
 use Illuminate\Database\Eloquent\Model;
@@ -38,6 +38,11 @@ use Illuminate\Database\Eloquent\Builder;
  * @property int $position
  * @method static \Illuminate\Database\Query\Builder|Article filterByTags($names)
  * @method static \Illuminate\Database\Query\Builder|Article orderByPosition()
+ * @property-read Collection|FileEntry[] $uploads
+ * @property-read int|null $categories_count
+ * @property-read int|null $feedback_count
+ * @property-read int|null $tags_count
+ * @property-read int|null $uploads_count
  */
 class Article extends Model
 {
@@ -107,6 +112,15 @@ class Article extends Model
     public function tags()
     {
         return $this->morphToMany('App\Tag', 'taggable');
+    }
+
+    /**
+     * @return belongsToMany
+     */
+    public function uploads()
+    {
+        return $this->morphToMany(FileEntry::class, 'model', 'file_entry_models')
+            ->orderBy('file_entries.created_at', 'desc');
     }
 
     /**

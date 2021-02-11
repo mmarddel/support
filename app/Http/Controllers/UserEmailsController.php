@@ -3,9 +3,9 @@
 use App\User;
 use App\Email;
 use Illuminate\Http\Request;
-use Common\Core\Controller;
+use Common\Core\BaseController;
 
-class UserEmailsController extends Controller
+class UserEmailsController extends BaseController
 {
     /**
      * @var Request

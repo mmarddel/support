@@ -28,7 +28,7 @@ class ModifyTriggers extends BaseFormRequest
     {
         $triggerId = $this->route('id');
 
-        $rules = [
+        return [
             'name' => ['required', 'min:1', 'max:250', Rule::unique('triggers')->ignore($triggerId)],
             'conditions' => 'required|array',
             'conditions.*.condition_id' => 'required|integer',
@@ -38,9 +38,5 @@ class ModifyTriggers extends BaseFormRequest
             'actions.*.value.*' => 'required|min:1',
             'actions.*.action_id' => 'required|integer',
         ];
-
-
-
-        return $rules;
     }
 }

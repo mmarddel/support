@@ -2,33 +2,37 @@
 
 namespace App\Providers;
 
+use App\Events\TicketCreated;
+use App\Events\TicketReplyCreated;
+use App\Events\TicketsAssigned;
+use App\Listeners\DeleteUserRelations;
+use App\Listeners\SendReplyCreatedNotif;
+use App\Listeners\SendTicketCreatedNotif;
+use App\Listeners\SendTicketsAssignedNotif;
+use App\Listeners\TicketEventSubscriber;
+use Common\Auth\Events\UsersDeleted;
 use Illuminate\Foundation\Support\Providers\EventServiceProvider as ServiceProvider;
 
 class EventServiceProvider extends ServiceProvider
 {
     /**
-     * The event listener mappings for the application.
-     *
      * @var array
      */
     protected $listen = [
-        'App\Events\SomeEvent' => [
-            'App\Listeners\EventListener',
-        ],
+        TicketsAssigned::class => [SendTicketsAssignedNotif::class],
+        TicketCreated::class => [SendTicketCreatedNotif::class],
+        TicketReplyCreated::class => [SendReplyCreatedNotif::class],
+        UsersDeleted::class => [DeleteUserRelations::class],
     ];
 
     /**
-     * The subscriber classes to register.
-     *
      * @var array
      */
     protected $subscribe = [
-        'App\Listeners\TicketEventSubscriber',
+        TicketEventSubscriber::class,
     ];
 
     /**
-     * Register any events for your application.
-     *
      * @return void
      */
     public function boot()

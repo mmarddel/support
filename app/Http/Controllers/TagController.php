@@ -2,13 +2,12 @@
 
 use App\Services\TagRepository;
 use App\Tag;
-use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Common\Core\BaseController;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Common\Core\Controller;
 
-class TagController extends Controller
+class TagController extends BaseController
 {
     /**
      * @var Tag
@@ -35,18 +34,6 @@ class TagController extends Controller
         $this->tag     = $tag;
         $this->request = $request;
         $this->tagRepository = $tagRepository;
-    }
-
-    /**
-     * @return JsonResponse
-     */
-    public function index()
-    {
-        $this->authorize('index', Tag::class);
-
-        $pagination = $this->tagRepository->paginateTags($this->request->all());
-
-        return $this->success(['pagination' => $pagination]);
     }
 
     /**
@@ -93,8 +80,6 @@ class TagController extends Controller
     }
 
     /**
-     * Delete multiple tags.
-     *
      * @return JsonResponse
      */
     public function deleteMultiple()

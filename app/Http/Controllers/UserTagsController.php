@@ -3,9 +3,9 @@
 use App\Tag;
 use App\User;
 use Illuminate\Http\Request;
-use Common\Core\Controller;
+use Common\Core\BaseController;
 
-class UserTagsController extends Controller
+class UserTagsController extends BaseController
 {
     /**
      * @var Request

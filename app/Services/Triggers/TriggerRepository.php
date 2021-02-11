@@ -1,5 +1,7 @@
 <?php namespace App\Services\Triggers;
 
+use Arr;
+use Auth;
 use DB;
 use App\Operator;
 use App\Trigger;
@@ -48,24 +50,6 @@ class TriggerRepository {
     }
 
     /**
-     * Paginate all triggers.
-     *
-     * @param array $params
-     * @return \Illuminate\Contracts\Pagination\LengthAwarePaginator
-     */
-    public function paginate($params)
-    {
-        $dbQuery = $this->trigger->newQuery();
-
-        if (isset($params['query'])) {
-            $dbQuery->where('name', 'like', '%'.$params['query'].'%')
-                ->orWhere('description', 'like', '%'.$params['query'].'%');
-        }
-
-        return $dbQuery->paginate(isset($params['per_page']) ? $params['per_page'] : null);
-    }
-
-    /**
      * Create a new trigger.
      *
      * @param array $params
@@ -75,34 +59,37 @@ class TriggerRepository {
     {
         $trigger = $this->trigger->create([
             'name'        => $params['name'],
-            'description' => isset($params['description']) ? $params['description'] : null,
-            'times_fired'  => isset($params['times_fired']) ? $params['times_fired'] : 0,
-            'created_at'  => isset($params['created']) ? $params['created'] : null,
+            'description' => $params['description'] ?? null,
+            'times_fired'  => $params['times_fired'] ?? 0,
+            'created_at'  => $params['created'] ?? null,
+            'user_id' => Auth::id(),
         ]);
 
-        //attach conditions to trigger
-        //attach values to conditions
-        $conditions = [];
-        foreach($params['conditions'] as $data) {
-            $conditions[$data['condition_id']] = [
+        // might need to insert multiple of same condition so can't use
+        // laravel multi-attach method as it won't allow duplicate IDs
+        $conditionInsert = array_map(function($data) use($trigger) {
+            return [
                 'condition_value' => $data['value'],
                 'match_type' => $data['matchType'],
                 'operator_id' => $data['operator_id'],
+                'condition_id' => $data['condition_id'],
+                'trigger_id' => $trigger['id'],
             ];
-        }
-
-        $trigger->conditions()->attach($conditions);
+        }, $params['conditions']);
+        // make sure we have no duplicates
+        $conditionInsert = array_map('unserialize', array_unique(array_map('serialize', $conditionInsert)));
+        $trigger->conditions()->newPivotStatement()->insert($conditionInsert);
 
         //attach actions to trigger
-        //attach values to actions
-        $actions = [];
-        foreach($params['actions'] as $data) {
-            $actions[$data['action_id']] = [
+        $actionInsert = array_map(function($data) use($trigger) {
+            return [
+                'action_id' => $data['action_id'],
                 'action_value' => json_encode($data['value']),
+                'trigger_id' => $trigger['id'],
             ];
-        }
-
-        $trigger->actions()->attach($actions);
+        }, $params['actions']);
+        $actionInsert = array_map('unserialize', array_unique(array_map('serialize', $actionInsert)));
+        $trigger->actions()->newPivotStatement()->insert($actionInsert);
 
         return $trigger;
     }

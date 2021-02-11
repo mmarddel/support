@@ -6,9 +6,9 @@ use Illuminate\Http\Request;
 use App\Services\Ticketing\ReplyRepository;
 use App\Services\Ticketing\TicketRepository;
 use App\Events\TicketUpdated;
-use Common\Core\Controller;
+use Common\Core\BaseController;
 
-class RepliesController extends Controller {
+class RepliesController extends BaseController {
 
 	/**
 	 * @var Request
@@ -41,7 +41,7 @@ class RepliesController extends Controller {
      * Show specified reply.
      *
      * @param int $id
-     * @return Reply
+     * @return JsonResponse
      */
 	public function show($id)
     {
@@ -49,7 +49,9 @@ class RepliesController extends Controller {
 
         $this->authorize('show', $reply);
 
-        return $reply->load('user', 'uploads', 'ticket');
+        $reply->load('user', 'uploads', 'ticket');
+
+        return $this->success(['reply' => $reply]);
     }
 
     /**
@@ -72,7 +74,7 @@ class RepliesController extends Controller {
 
         $reply = $this->repository->update($this->request->all(), $reply);
 
-        if ($reply->type !== 'drafts') {
+        if ($reply->type !== Reply::DRAFT_TYPE) {
             $ticket = $this->ticketRepository->find($reply->ticket_id);
             event(new TicketUpdated($ticket, $ticket));
         }

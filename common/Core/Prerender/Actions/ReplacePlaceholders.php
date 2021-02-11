@@ -3,10 +3,9 @@
 namespace Common\Core\Prerender\Actions;
 
 use Illuminate\Pagination\AbstractPaginator;
-use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Arr;
 use Common\Core\Contracts\AppUrlGenerator;
-use Illuminate\Support\Debug\Dumper;
+use Illuminate\Support\Str;
 
 class ReplacePlaceholders
 {
@@ -106,12 +105,17 @@ class ReplacePlaceholders
 
     /**
      * @param string|string[] $template
-     * @param array $data
+     * @param array $originalData
      * @return string|string[]
      */
-    private function replaceString($template, $data)
+    private function replaceString($template, $originalData)
     {
-        return preg_replace_callback('/{{([\w\.\-]+?)}}/', function($matches) use($data) {
+        $data = [];
+        foreach ($originalData as $key => $value) {
+            $data[Str::lower($key)] = $value;
+        }
+
+        return preg_replace_callback('/{{([\w\.\-\?\:]+?)}}/', function($matches) use($data) {
             if ( ! isset($matches[1])) return $matches[0];
 
             $placeholder = strtolower($matches[1]);
@@ -127,23 +131,43 @@ class ReplacePlaceholders
             }
 
             // replace by url generator url
-            if (starts_with($placeholder, 'url.')) {
+            if (Str::startsWith($placeholder, 'url.')) {
                 // "url.movie" => "movie"
                 $resource = str_replace('url.', '', $placeholder);
                 // "new_releases" => "newReleases"
-                $method = camel_case($resource);
+                $method = Str::camel($resource);
                 return $this->urls->$method(Arr::get($data, $resource) ?: $data);
             }
 
-            // supports dot notation: 'artist.bio.text'
-            $replacement = Arr::get($data, $placeholder);
+            // replace placeholder with actual value.
+            // supports dot notation: 'artist.bio.text' as well as ?:
+            $replacement = $this->findUsingDotNotation($data, $placeholder);
 
-            // return original placeholder if it can't be replaced
-            if ( ! $replacement || is_array($replacement)) {
-                return $matches[0];
+            // prefix relative image urls with base site url
+            if ($replacement && Str::startsWith($replacement, 'storage/')) {
+                $replacement = config('app.url') . "/$replacement"; url();
             }
 
-            return str_limit(strip_tags($replacement), 400);
+            // return null if we could not replace placeholder
+            if ( ! $replacement) {
+                return null;
+            }
+
+            return Str::limit(strip_tags($this->replaceString($replacement, $data), '<br>'), 400);
         }, $template);
+    }
+
+    /**
+     * @param array $data
+     * @param string $item
+     * @return mixed|void
+     */
+    private function findUsingDotNotation($data, $item)
+    {
+        foreach (explode('?:', $item) as $itemVariant) {
+            if ($value = Arr::get($data, $itemVariant)) {
+                return $value;
+            }
+        }
     }
 }

@@ -16,9 +16,9 @@ class AddColumnsToUsersTable extends Migration
         if (Schema::hasColumn('users', 'language')) return;
 
         Schema::table('users', function (Blueprint $table) {
-            $table->string('language')->nullable();
-            $table->string('country')->nullable();
-            $table->string('timezone')->nullable();
+            $table->string('language', 30)->nullable();
+            $table->string('country', 30)->nullable();
+            $table->string('timezone', 30)->nullable();
         });
     }
 

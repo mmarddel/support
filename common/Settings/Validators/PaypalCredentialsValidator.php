@@ -90,13 +90,14 @@ class PaypalCredentialsValidator implements SettingsValidator
      */
     private function getErrorMessage($data)
     {
-        $type = $data['name'];
-
-        switch ($type) {
-            case 'AUTHENTICATION_FAILURE':
-                return ['paypal_group' => 'Paypal Client ID or Paypal Secret is invalid.'];
-            default:
-                return $this->getDefaultError();
+        $message = Arr::get($data, 'message');
+        if ($data['name'] === 'AUTHENTICATION_FAILURE') {
+            return ['paypal_group' => 'Paypal Client ID or Paypal Secret is invalid.'];
+        } else if ($message) {
+            $infoLink = Arr::get($data, 'information_link');
+            return ['paypal_group' => "$message. $infoLink"];
+        } else {
+            return $this->getDefaultError();
         }
     }
 

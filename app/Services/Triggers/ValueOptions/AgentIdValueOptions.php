@@ -1,14 +1,13 @@
 <?php namespace App\Services\Triggers\ValueOptions;
 
 use Auth;
+use Common\Auth\Actions\PaginateUsers;
 use Common\Auth\UserRepository;
 use Illuminate\Support\Collection;
 
 class AgentIdValueOptions implements ValueOptionsInterface  {
 
     /**
-     * UserRepository Instance.
-     *
      * @var UserRepository
      */
     private $userRepository;
@@ -27,9 +26,9 @@ class AgentIdValueOptions implements ValueOptionsInterface  {
     {
         //get all current agents
         //TODO: fetch by 'tickets.update' permission on user and user roles via join
-        $users = collect($this->userRepository->paginateUsers([
+        $users = collect(app(PaginateUsers::class)->execute([
             'role_name' => 'agents',
-            'per_page'   => 25,
+            'perPage'   => 25,
         ])->items());
 
         //we need only agent display name and id

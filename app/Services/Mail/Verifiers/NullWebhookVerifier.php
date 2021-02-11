@@ -1,7 +1,7 @@
 <?php namespace App\Services\Mail\Verifiers;
 
 use Common\Settings\Settings;
-use Illuminate\Support\Arr;
+use Arr;
 
 class NullWebhookVerifier
 {

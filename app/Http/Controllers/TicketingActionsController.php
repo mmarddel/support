@@ -2,9 +2,9 @@
 
 use App\Services\Ticketing\HelpScoutImporter;
 use Auth;
-use Common\Core\Controller;
+use Common\Core\BaseController;
 
-class TicketingActionsController extends Controller
+class TicketingActionsController extends BaseController
 {
     /**
      * @var HelpScoutImporter

@@ -1,5 +1,7 @@
 <?php namespace App\Services\Triggers\Conditions;
 
+use Str;
+
 class PrimitiveValuesComparator {
 
     /**
@@ -15,13 +17,13 @@ class PrimitiveValuesComparator {
     {
         switch ($operator) {
             case 'contains':
-                return str_contains($haystack, $needle);
+                return Str::contains($haystack, $needle);
             case 'not_contains':
-                return ! str_contains($haystack, $needle);
+                return ! Str::contains($haystack, $needle);
             case 'starts_with':
-                return starts_with($haystack, $needle);
+                return Str::startsWith($haystack, $needle);
             case 'ends_with':
-                return ends_with($haystack, $needle);
+                return Str::endsWith($haystack, $needle);
             case 'equals':
             case 'is':
                 return $haystack === $needle;

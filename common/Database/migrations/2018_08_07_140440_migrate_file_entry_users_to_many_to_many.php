@@ -13,6 +13,10 @@ class MigrateFileEntryUsersToManyToMany extends Migration
      */
     public function up()
     {
+        if ( ! Schema::hasTable('user_file_entry')) {
+            return;
+        }
+
         FileEntry::select('id', 'user_id')->orderBy('id')->chunk(50, function(Collection $entries) {
             $records = $entries->map(function(FileEntry $entry) {
                 return ['file_entry_id' => $entry->id, 'user_id' => $entry->user_id, 'owner' => 1];

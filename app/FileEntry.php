@@ -20,6 +20,6 @@ class FileEntry extends CommonFileEntry
      */
     public function canned_replies()
     {
-        return $this->morphedByMany('App\CannedReply', 'model', 'file_entry_models');
+        return $this->morphedByMany(CannedReply::class, 'model', 'file_entry_models');
     }
 }

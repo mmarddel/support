@@ -1,8 +1,10 @@
 <?php namespace App\Services\Triggers\Actions;
 
 use App\Action;
+use App\Reply;
 use App\Ticket;
 use App\Services\Ticketing\ReplyRepository;
+use App\Trigger;
 
 class AddNoteToTicketAction implements TriggerActionInterface {
 
@@ -28,15 +30,17 @@ class AddNoteToTicketAction implements TriggerActionInterface {
      *
      * @param Ticket $ticket
      * @param Action $action
+     * @param Trigger $trigger
      * @return Ticket
      */
-    public function perform(Ticket $ticket, Action $action)
+    public function perform(Ticket $ticket, Action $action, Trigger $trigger)
     {
         $body = json_decode($action->pivot['action_value'])->note_text;
 
         $this->replyRepository->create([
             'body' => $body,
-        ], $ticket, 'notes');
+            'user_id' => $trigger->user_id
+        ], $ticket, Reply::NOTE_TYPE);
 
         return $ticket;
     }

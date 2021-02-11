@@ -4,10 +4,11 @@ namespace Common\Files\Controllers;
 
 use Common\Files\Actions\Deletion\RestoreEntries;
 use Common\Files\FileEntry;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Common\Core\Controller;
+use Common\Core\BaseController;
 
-class RestoreDeletedEntriesController extends Controller
+class RestoreDeletedEntriesController extends BaseController
 {
     /**
      * @var Request
@@ -23,11 +24,8 @@ class RestoreDeletedEntriesController extends Controller
     }
 
     /**
-     * Restore specified soft delete entries.
-     *
      * @param RestoreEntries $action
-     * @return \Illuminate\Http\JsonResponse
-     * @throws \Illuminate\Auth\Access\AuthorizationException
+     * @return JsonResponse
      */
     public function restore(RestoreEntries $action)
     {

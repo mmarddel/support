@@ -38,9 +38,10 @@ class MoveTicketToCategoryAction implements TriggerActionInterface {
      *
      * @param Ticket $ticket
      * @param Action $action
+     * @param \App\Trigger $trigger
      * @return Ticket
      */
-    public function perform(Ticket $ticket, Action $action)
+    public function perform(Ticket $ticket, Action $action, \App\Trigger $trigger)
     {
         $categoryName = json_decode($action['pivot']['action_value'])->category_name;
 

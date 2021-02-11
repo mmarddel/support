@@ -5,11 +5,14 @@ namespace App\Http;
 use App\Http\Middleware\EncryptCookies;
 use App\Http\Middleware\RedirectIfAuthenticated;
 use App\Http\Middleware\TrimStrings;
+use App\Http\Middleware\TrustHosts;
+use Fruitcake\Cors\HandleCors;
+use Illuminate\Auth\Middleware\RequirePassword;
+use Illuminate\Auth\Middleware\EnsureEmailIsVerified;
+use \Illuminate\Routing\Middleware\ValidateSignature;
 use App\Http\Middleware\VerifyCsrfToken;
-use Common\Core\Middleware\NormalizeUri;
 use Common\Core\Middleware\PrerenderIfCrawler;
-use Common\Core\Middleware\RedirectToHttps;
-use Fideloper\Proxy\TrustProxies;
+use Common\Core\Middleware\TrustProxies;
 use Illuminate\Auth\Middleware\Authenticate;
 use Illuminate\Auth\Middleware\AuthenticateWithBasicAuth;
 use Illuminate\Auth\Middleware\Authorize;
@@ -20,6 +23,7 @@ use Illuminate\Foundation\Http\Middleware\ConvertEmptyStringsToNull;
 use Illuminate\Foundation\Http\Middleware\ValidatePostSize;
 use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Routing\Middleware\ThrottleRequests;
+use Illuminate\Session\Middleware\AuthenticateSession;
 use Illuminate\Session\Middleware\StartSession;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
 
@@ -33,12 +37,13 @@ class Kernel extends HttpKernel
      * @var array
      */
     protected $middleware = [
+        TrustHosts::class,
+        TrustProxies::class,
+        HandleCors::class,
         CheckForMaintenanceMode::class,
-        NormalizeUri::class,
         ValidatePostSize::class,
         TrimStrings::class,
         ConvertEmptyStringsToNull::class,
-        TrustProxies::class,
     ];
 
     /**
@@ -51,15 +56,15 @@ class Kernel extends HttpKernel
             EncryptCookies::class,
             AddQueuedCookiesToResponse::class,
             StartSession::class,
+            AuthenticateSession::class,
             ShareErrorsFromSession::class,
             VerifyCsrfToken::class,
             SubstituteBindings::class,
-            RedirectToHttps::class,
         ],
 
         'api' => [
             'throttle:60,1',
-            'bindings'
+            SubstituteBindings::class,
         ],
     ];
 
@@ -76,7 +81,10 @@ class Kernel extends HttpKernel
         'bindings' => SubstituteBindings::class,
         'can' => Authorize::class,
         'guest' => RedirectIfAuthenticated::class,
+        'password.confirm' => RequirePassword::class,
+        'signed' => ValidateSignature::class,
         'throttle' => ThrottleRequests::class,
+        'verified' => EnsureEmailIsVerified::class,
         'prerenderIfCrawler' => PrerenderIfCrawler::class,
     ];
 }

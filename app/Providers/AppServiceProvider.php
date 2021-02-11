@@ -1,16 +1,20 @@
 <?php namespace App\Providers;
 
+use App\Scout\ElasticSearchEngine;
+use App\Scout\MysqlSearchEngine;
+use App\Services\Admin\GetAnalyticsHeaderData;
+use App\Services\Envato\EnvatoApiClient;
+use App\Services\Envato\EnvatoSupportPeriodValidator;
+use App\Services\SocialiteProviders\EnvatoProvider;
 use App\Services\UrlGenerator;
 use App\Services\UserRepository;
+use Common\Admin\Analytics\Actions\GetAnalyticsHeaderDataAction;
 use Common\Core\Contracts\AppUrlGenerator;
-use Validator;
 use Common\Settings\Settings;
-use Laravel\Scout\EngineManager;
-use App\Scout\MysqlSearchEngine;
-use App\Scout\ElasticSearchEngine;
 use Illuminate\Support\ServiceProvider;
-use App\Services\Envato\EnvatoApiClient;
-use App\Services\SocialiteProviders\EnvatoProvider;
+use Laravel\Scout\EngineManager;
+use Laravel\Socialite\Contracts\Factory;
+use Validator;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -22,11 +26,8 @@ class AppServiceProvider extends ServiceProvider
     public function boot()
     {
         $this->registerScoutEngines();
-
-        if ($this->app->make(Settings::class)->get('envato.enable')) {
-            $this->registerSocialiteEnvatoDriver();
-            $this->addPurchaseCodeValidationRule();
-        }
+        $this->registerSocialiteEnvatoDriver();
+        $this->registerEnvatoFormValidations();
 
         $this->app->bind(\Common\Auth\UserRepository::class, UserRepository::class);
     }
@@ -41,6 +42,11 @@ class AppServiceProvider extends ServiceProvider
         $this->app->bind(
             AppUrlGenerator::class,
             UrlGenerator::class
+        );
+
+        $this->app->bind(
+            GetAnalyticsHeaderDataAction::class,
+            GetAnalyticsHeaderData::class
         );
     }
 
@@ -64,15 +70,16 @@ class AppServiceProvider extends ServiceProvider
         }
     }
 
-    /**
-     * Extend validator with envato purchase code check rule.
-     */
-    private function addPurchaseCodeValidationRule() {
-        $envato = $this->app->make(EnvatoApiClient::class);
+    private function registerEnvatoFormValidations()
+    {
+        if ($this->app->make(Settings::class)->get('envato.enable')) {
+            $envato = $this->app->make(EnvatoApiClient::class);
+            Validator::extend('purchase_code_valid', function ($attribute, $value) use($envato) {
+                return $envato->purchaseCodeIsValid($value);
+            });
+        }
 
-        Validator::extend('purchase_code_valid', function ($attribute, $value) use($envato) {
-            return $envato->purchaseCodeIsValid($value);
-        });
+        Validator::extend('envatoSupportActive', EnvatoSupportPeriodValidator::class);
     }
 
     /**
@@ -80,11 +87,12 @@ class AppServiceProvider extends ServiceProvider
      */
     private function registerSocialiteEnvatoDriver()
     {
-        $socialite = $this->app->make('Laravel\Socialite\Contracts\Factory');
-        $socialite->extend('envato', function ($app) use ($socialite) {
+        if ($this->app->make(Settings::class)->get('envato.enable')) {
+            $socialite = $this->app->make(Factory::class);
+            $socialite->extend('envato', function ($app) use ($socialite) {
                 $config = $app['config']['services.envato'];
                 return $socialite->buildProvider(EnvatoProvider::class, $config);
-            }
-        );
+            });
+        }
     }
 }

@@ -10,24 +10,21 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\MorphToMany;
 use Illuminate\Notifications\DatabaseNotification;
 use Illuminate\Notifications\DatabaseNotificationCollection;
-use Laravel\Scout\Searchable;
 use Illuminate\Notifications\Notifiable;
+use Arr;
+use Laravel\Scout\Searchable;
 
 /**
+ * App\User
+ *
  * @property-read Collection|Ticket[] $tickets
  * @property-read Collection|Reply[] $replies
  * @property-read Collection|CannedReply[] $cannedReplies
- * @property-read DatabaseNotificationCollection|DatabaseNotification[] $unreadNotifications
- * @mixin Eloquent
  * @property-read Collection|PurchaseCode[] $envato_purchase_codes
- * @property-read DatabaseNotificationCollection|DatabaseNotification[] $readNotifications
  * @property-read Collection|PurchaseCode[] $purchase_codes
- * @property-read Collection|Tag[] $tags
  * @property-read Collection|Email[] $secondary_emails
  * @property-read UserDetails $details
- * @property string $language
- * @property string $country
- * @property string $timezone
+ *  @mixin Eloquent
  */
 class User extends BaseUser
 {
@@ -140,20 +137,21 @@ class User extends BaseUser
      *
      * @param array $purchases
      * @param string $envatoUsername
+     * @return PurchaseCode[]
      */
     public function updatePurchases($purchases, $envatoUsername = null) {
-        foreach ($purchases as $purchaseDetails) {
-            $supportedUntil = array_get($purchaseDetails, 'supported_until');
-            $this->purchase_codes()->updateOrCreate(['code' => $purchaseDetails['code']], [
+        return array_map(function($purchaseDetails) use($envatoUsername) {
+            $supportedUntil = Arr::get($purchaseDetails, 'supported_until');
+            return $this->purchase_codes()->updateOrCreate(['code' => $purchaseDetails['code']], [
                 'item_name' => $purchaseDetails['item']['name'],
                 'item_id'   => $purchaseDetails['item']['id'],
                 'code'      => $purchaseDetails['code'],
                 'supported_until' => $supportedUntil ? Carbon::parse($supportedUntil) : null,
-                'url'       => array_get($purchaseDetails, 'item.url'),
-                'image'     => array_get($purchaseDetails, 'item.previews.icon_preview.icon_url'),
-                'envato_username' => $envatoUsername,
+                'url'       => Arr::get($purchaseDetails, 'item.url'),
+                'image'     => Arr::get($purchaseDetails, 'item.previews.icon_preview.icon_url'),
+                'envato_username' => $envatoUsername ?: Arr::get($purchaseDetails, 'buyer'),
             ]);
-        }
+        }, $purchases);
     }
 
     /**

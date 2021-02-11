@@ -1,20 +1,19 @@
 <?php namespace App\Policies;
 
 use App\User;
+use Common\Core\Policies\BasePolicy;
 use Illuminate\Auth\Access\HandlesAuthorization;
 
-class ArticlePolicy
+class ArticlePolicy extends BasePolicy
 {
-    use HandlesAuthorization;
-
-    public function index(User $user)
+    public function index(?User $user)
     {
-        return $user->hasPermission('articles.view');
+        return $this->userOrGuestHasPermission($user, 'articles.view');
     }
 
-    public function show(User $user)
+    public function show(?User $user)
     {
-        return $user->hasPermission('articles.view');
+        return $this->userOrGuestHasPermission($user, 'articles.view');
     }
 
     public function store(User $user)

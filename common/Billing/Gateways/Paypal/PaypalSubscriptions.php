@@ -1,12 +1,13 @@
 <?php namespace Common\Billing\Gateways\Paypal;
 
+use App\User;
+use Arr;
+use Carbon\Carbon;
 use Common\Billing\BillingPlan;
 use Common\Billing\GatewayException;
 use Common\Billing\Gateways\Contracts\GatewaySubscriptionsInterface;
 use Common\Billing\Subscription;
-use Carbon\Carbon;
 use Omnipay\PayPal\RestGateway;
-use App\User;
 
 class PaypalSubscriptions implements GatewaySubscriptionsInterface
 {
@@ -68,12 +69,16 @@ class PaypalSubscriptions implements GatewaySubscriptionsInterface
             'name'        => config('app.name')." subscription: {$plan->name}.",
             'description' => "{$plan->name} subscription on ".config('app.name'),
             'planId' => $this->paypalPlans->getPlanId($plan),
-            'startDate' => $startDate ? Carbon::parse($startDate) : Carbon::now()->addMinute(),
+            'startDate' => $startDate ? Carbon::parse($startDate) : Carbon::now('utc')->endOfDay(),
             'payerDetails' => ['payment_method' => 'paypal'],
         ])->send();
 
         if ( ! $response->isSuccessful() || ! $response->isRedirect()) {
-            throw new GatewayException('Could not create subscription agreement on paypal');
+            $message = $response->getMessage();
+            if (isset($response->getData()['details'][0]['issue'])) {
+                $message = $response->getData()['details'][0]['issue'];
+            }
+            throw new GatewayException("Could not create subscription agreement on paypal: $message");
         }
 
         if ($this->gateway->getTestMode()) {
@@ -104,7 +109,10 @@ class PaypalSubscriptions implements GatewaySubscriptionsInterface
         ])->send();
 
         if ( ! $response->isSuccessful()) {
-            throw new GatewayException("Paypal sub cancel failed: {$response->getMessage()}");
+            // don't throw error if subscription is already invalid on paypal
+            if (Arr::get($response->getData(), 'name') !== 'STATUS_INVALID') {
+                throw new GatewayException("Paypal sub cancel failed: {$response->getMessage()}");
+            }
         }
 
         return true;

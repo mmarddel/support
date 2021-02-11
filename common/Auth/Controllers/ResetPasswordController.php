@@ -1,25 +1,13 @@
 <?php namespace Common\Auth\Controllers;
 
-use App\User;
-use Illuminate\Http\Request;
-use Common\Core\Controller;
+use Common\Core\BaseController;
+use Common\Core\Bootstrap\BaseBootstrapData;
 use Illuminate\Foundation\Auth\ResetsPasswords;
+use Illuminate\Http\Request;
 
-class ResetPasswordController extends Controller
+class ResetPasswordController extends BaseController
 {
     use ResetsPasswords;
-
-    /**
-     * Where to redirect users after resetting their password.
-     *
-     * @var string
-     */
-    protected $redirectTo = '/home';
-
-    /**
-     * @var User
-     */
-    private $user;
 
     /**
      * @var Request
@@ -27,17 +15,20 @@ class ResetPasswordController extends Controller
     private $request;
 
     /**
-     * Create a new controller instance.
-     *
-     * @param User $user
-     * @param Request $request
+     * @var BaseBootstrapData
      */
-    public function __construct(User $user, Request $request)
+    private $bootstrapData;
+
+    /**
+     * @param Request $request
+     * @param BaseBootstrapData $bootstrapData
+     */
+    public function __construct(Request $request, BaseBootstrapData $bootstrapData)
     {
         $this->middleware('guest');
 
-        $this->user = $user;
         $this->request = $request;
+        $this->bootstrapData = $bootstrapData;
     }
 
     /**
@@ -45,16 +36,7 @@ class ResetPasswordController extends Controller
      */
     protected function sendResetResponse()
     {
-        return $this->success(['data' =>
-            $this->user->with('roles')->where('email', $this->request->get('email'))->first()
-        ]);
-    }
-
-    /**
-     * {@inheritdoc}
-     */
-    protected function sendResetFailedResponse(Request $request, $response)
-    {
-        return $this->error(['email' => trans($response)]);
+        $user = $this->bootstrapData->getCurrentUser();
+        return $this->success(['data' => $user]);
     }
 }

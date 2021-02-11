@@ -2,21 +2,26 @@
 
 use App\User;
 use Auth;
-use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\Collection;
-use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\SoftDeletes;
-use Illuminate\Support\Arr;
+use Carbon\Carbon;
 use Common\Files\Traits\HandlesEntryPaths;
 use Common\Files\Traits\HashesId;
 use Common\Tags\HandlesTags;
 use Common\Tags\Tag;
+use Eloquent;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
+use Arr;
 use Storage;
 
 /**
  * FileEntry
  *
- * @mixin \Eloquent
+ * @mixin Eloquent
  * @property integer $id
  * @property integer $parent_id
  * @property string $name
@@ -26,18 +31,20 @@ use Storage;
  * @property string $extension
  * @property boolean $thumbnail
  * @property string $preview_token
- * @property \Carbon\Carbon $created_at
- * @property \Carbon\Carbon $updated_at
+ * @property Carbon $created_at
+ * @property Carbon $updated_at
  * @property-read string $type
  * @property-read FileEntry|null $parent
  * @property-read Collection $users
  * @property-read Collection $owner
  * @property string $path
- * @property string $public_path
+ * @property string $disk_prefix
+ * @property boolean $public
  * @method static \Illuminate\Database\Query\Builder|FileEntry onlyTrashed()
  * @method static \Illuminate\Database\Query\Builder|FileEntry rootOnly()
  * @method static \Illuminate\Database\Query\Builder|FileEntry onlyStarred()
  * @method static \Illuminate\Database\Query\Builder|FileEntry whereRootOrParentNotTrashed()
+ * @method whereOwner($userId)
  */
 class FileEntry extends Model
 {
@@ -52,23 +59,25 @@ class FileEntry extends Model
         'user_id' => 'integer',
         'parent_id' => 'integer',
         'thumbnail' => 'boolean',
+        'public' => 'boolean',
+        'workspace_id' => 'integer',
     ];
 
     /**
-     * @return \Illuminate\Database\Eloquent\Relations\BelongsToMany
+     * @return BelongsToMany
      */
     public function users()
     {
-        return $this->belongsToMany(FileEntryUser::class, 'user_file_entry', 'file_entry_id', 'user_id')
-            ->using(UserFileEntry::class)
+        return $this->morphedByMany(FileEntryUser::class, 'model', 'file_entry_models', 'file_entry_id', 'model_id')
+            ->using(FileEntryPivot::class)
             ->select('first_name', 'last_name', 'email', 'users.id', 'avatar')
             ->withPivot('owner', 'permissions')
             ->withTimestamps()
-            ->orderBy('user_file_entry.created_at', 'asc');
+            ->orderBy('file_entry_models.created_at', 'asc');
     }
 
     /**
-     * @return \Illuminate\Database\Eloquent\Relations\HasMany
+     * @return HasMany
      */
     public function children()
     {
@@ -76,16 +85,15 @@ class FileEntry extends Model
     }
 
     /**
-     * @return \Illuminate\Database\Eloquent\Relations\BelongsTo
+     * @return BelongsTo
      */
     public function parent()
     {
         return $this->belongsTo(static::class, 'parent_id');
     }
 
-
     /**
-     * @return \Illuminate\Database\Eloquent\Relations\MorphToMany
+     * @return BelongsToMany
      */
     public function tags()
     {
@@ -94,8 +102,6 @@ class FileEntry extends Model
     }
 
     /**
-     * Get url for previewing upload.
-     *
      * @param string $value
      * @return string
      */
@@ -107,18 +113,23 @@ class FileEntry extends Model
         }
 
         if (Arr::get($this->attributes, 'public')) {
-            return "storage/$this->public_path/$this->file_name";
+            return Storage::disk('public')->url("$this->disk_prefix/$this->file_name");
         } else {
             return 'secure/uploads/'.$this->attributes['id'];
         }
     }
 
-    public function getStoragePath()
+    /**
+     * @param bool $useThumbnail
+     * @return string
+     */
+    public function getStoragePath($useThumbnail = false)
     {
+        $fileName = $useThumbnail ? 'thumbnail.jpg' : $this->file_name;
         if ($this->public) {
-            return "$this->public_path/$this->file_name";
+            return "$this->disk_prefix/$fileName";
         } else {
-            return "$this->file_name/$this->file_name";
+            return "$this->file_name/$fileName";
         }
     }
 
@@ -127,7 +138,7 @@ class FileEntry extends Model
         if ($this->public) {
             return Storage::drive('public');
         } else {
-            return Storage::drive(config('common.site.uploads_disk'));
+            return Storage::drive('uploads');
         }
     }
 
@@ -144,7 +155,7 @@ class FileEntry extends Model
     }
 
     /**
-     * @return \Illuminate\Database\Eloquent\Relations\BelongsToMany
+     * @return BelongsToMany
      */
     public function owner()
     {
@@ -169,8 +180,9 @@ class FileEntry extends Model
     public function scopeWhereUser(Builder $builder, $userId, $owner = null) {
         return $builder->whereIn('id', function ($query) use($userId, $owner) {
             $query->select('file_entry_id')
-                ->from('user_file_entry')
-                ->where('user_id', $userId);
+                ->from('file_entry_models')
+                ->where('model_id', $userId)
+                ->where('model_type', User::class);
 
             // if $owner is not null, need to load either only
             // entries user owns or entries user does not own
@@ -212,7 +224,7 @@ class FileEntry extends Model
     public function findPath($id)
     {
         $entry = $this->find($id, ['path']);
-        return $entry ? $entry->getOriginal('path') : '';
+        return $entry ? $entry->getRawOriginal('path') : '';
     }
 
     /**
@@ -229,5 +241,14 @@ class FileEntry extends Model
         }
 
         return $this->name;
+    }
+
+    public function getTotalSize(): int
+    {
+        if ($this->type === 'folder') {
+            return $this->allChildren()->sum('file_size');
+        } else {
+            return $this->file_size;
+        }
     }
 }

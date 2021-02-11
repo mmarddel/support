@@ -1,12 +1,15 @@
 <?php namespace App;
 
+use Carbon\Carbon;
 use Common\Files\FileEntry;
 use DB;
-use App;
-use Carbon\Carbon;
-use Common\Settings\Settings;
-use Illuminate\Database\Eloquent\Model;
+use Eloquent;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\belongsToMany;
+use Illuminate\Support\Str;
 
 /**
  * App\Reply
@@ -16,18 +19,35 @@ use Illuminate\Database\Eloquent\Builder;
  * @property integer $user_id
  * @property integer $ticket_id
  * @property string $type
- * @property \Carbon\Carbon $created_at
- * @property \Carbon\Carbon $updated_at
- * @property-read \Illuminate\Database\Eloquent\Collection|\App\Upload[] $uploads
- * @property-read \App\Ticket $ticket
- * @property-read \App\User $user
- * @method static \Illuminate\Database\Query\Builder|\App\Reply compact()
- * @mixin \Eloquent
+ * @property Carbon $created_at
+ * @property Carbon $updated_at
+ * @property string created_at_formatted
+ * @property-read Collection|FileEntry[] $uploads
+ * @property-read Ticket $ticket
+ * @property-read User $user
+ * @method static \Illuminate\Database\Query\Builder|Reply compact()
+ * @mixin Eloquent
  * @property string $uuid
- * @method static \Illuminate\Database\Query\Builder|\App\Reply whereUuid($value)
+ * @method static \Illuminate\Database\Query\Builder|Reply whereUuid($value)
+ * @property-read mixed $created_at_formatted
+ * @method static \Illuminate\Database\Eloquent\Builder|\App\Reply whereBody($value)
+ * @method static \Illuminate\Database\Eloquent\Builder|\App\Reply whereCreatedAt($value)
+ * @method static \Illuminate\Database\Eloquent\Builder|\App\Reply whereId($value)
+ * @method static \Illuminate\Database\Eloquent\Builder|\App\Reply whereTicketId($value)
+ * @method static \Illuminate\Database\Eloquent\Builder|\App\Reply whereType($value)
+ * @method static \Illuminate\Database\Eloquent\Builder|\App\Reply whereUpdatedAt($value)
+ * @method static \Illuminate\Database\Eloquent\Builder|\App\Reply whereUserId($value)
+ * @property-read int|null $uploads_count
+ * @method static \Illuminate\Database\Eloquent\Builder|\App\Reply newModelQuery()
+ * @method static \Illuminate\Database\Eloquent\Builder|\App\Reply newQuery()
+ * @method static \Illuminate\Database\Eloquent\Builder|\App\Reply query()
  */
 class Reply extends Model
 {
+    const DRAFT_TYPE = 'drafts';
+    const REPLY_TYPE = 'replies';
+    const NOTE_TYPE = 'notes';
+
     /**
      * The attributes that should be cast to native types.
      *
@@ -54,16 +74,16 @@ class Reply extends Model
     protected $hidden = ['uuid'];
 
     /**
-     * @return \Illuminate\Database\Eloquent\Relations\belongsToMany
+     * @return belongsToMany
      */
     public function uploads()
     {
         return $this->morphToMany(FileEntry::class, 'model', 'file_entry_models')
-            ->orderBy('created_at', 'desc');
+            ->orderBy('file_entries.created_at', 'desc');
     }
 
     /**
-     * @return \Illuminate\Database\Eloquent\Relations\belongsTo
+     * @return belongsTo
      */
     public function ticket()
     {
@@ -71,7 +91,7 @@ class Reply extends Model
     }
 
     /**
-     * @return \Illuminate\Database\Eloquent\Relations\BelongsTo
+     * @return BelongsTo
      */
     public function user()
     {
@@ -81,6 +101,23 @@ class Reply extends Model
     public function scopeCompact(Builder $q)
     {
         return $q->select('id', 'user_id', DB::raw('SUBSTRING(body, 1, 80) as body'));
+    }
+
+    /**
+     * @param int $length
+     */
+    public function stripBody($length = 200)
+    {
+        if ($this->exists) {
+            $body = Str::limit(strip_tags($this->body, '<br>'), $length);
+            $this->body = preg_replace('/<br\W*?>/', ' ', $body); // replace <br> with space
+        }
+    }
+
+    public function bodyForEmail()
+    {
+        // prepend relative image urls for email body
+        return preg_replace('/"\/?(storage\/ticket_images\/[a-zA-Z0-9]+.[a-z]+)"/', url('') . "/$1", $this->body);
     }
 
     public function getCreatedAtFormattedAttribute()

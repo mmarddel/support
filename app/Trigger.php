@@ -16,17 +16,17 @@ use Illuminate\Database\Eloquent\Model;
  * @property \Carbon\Carbon $updated_at
  * @property-read \Illuminate\Database\Eloquent\Collection|\App\Condition[] $conditions
  * @property-read \Illuminate\Database\Eloquent\Collection|\App\Action[] $actions
- * @method static \Illuminate\Database\Query\Builder|\App\Trigger whereDescription($value)
- * @method static \Illuminate\Database\Query\Builder|\App\Trigger whereTimesUsed($value)
- * @method static \Illuminate\Database\Query\Builder|\App\Trigger whereCreatedAt($value)
- * @method static \Illuminate\Database\Query\Builder|\App\Trigger whereUpdatedAt($value)
- * @method static \Illuminate\Database\Query\Builder|\App\Trigger whereTimesFired($value)
+ * @property integer user_id
  */
 class Trigger extends Model
 {
     protected $guarded = ['id'];
 
-    protected $casts = ['id' => 'integer', 'times_fired' => 'integer'];
+    protected $casts = [
+        'id' => 'integer',
+        'times_fired' => 'integer',
+        'user_id' => 'integer',
+    ];
 
     /**
      * Conditions that are attached to this trigger.

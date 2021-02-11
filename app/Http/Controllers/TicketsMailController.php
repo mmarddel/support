@@ -4,9 +4,9 @@ use Illuminate\Http\Request;
 use App\Services\Mail\FailedMailHandler;
 use App\Services\Mail\IncomingMailHandler;
 use App\Services\Mail\Verifiers\MailWebhookVerifier;
-use Common\Core\Controller;
+use Common\Core\BaseController;
 
-class TicketsMailController extends Controller
+class TicketsMailController extends BaseController
 {
     /**
      * @var Request
@@ -29,8 +29,6 @@ class TicketsMailController extends Controller
     private $mailWebhookVerifier;
 
     /**
-     * TicketsMailController constructor.
-     *
      * @param Request $request
      * @param IncomingMailHandler $mailHandler
      * @param FailedMailHandler $failedMailHandler

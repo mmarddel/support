@@ -3,7 +3,7 @@
 namespace Common\Settings\Validators;
 
 use Exception;
-use Raven_Client;
+use Sentry\Dsn;
 
 class LoggingCredentialsValidator
 {
@@ -12,7 +12,7 @@ class LoggingCredentialsValidator
     public function fails($settings)
     {
         try {
-            Raven_Client::parseDSN($settings['sentry_dsn']);
+            Dsn::createFromString($settings['sentry_dsn']);
         } catch (Exception $e) {
             return $this->getErrorMessage($e);
         }

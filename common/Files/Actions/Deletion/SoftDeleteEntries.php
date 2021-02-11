@@ -2,6 +2,7 @@
 
 namespace Common\Files\Actions\Deletion;
 
+use Common\Files\Events\FileEntriesDeleted;
 use Common\Files\FileEntry;
 use Illuminate\Support\Collection;
 use Common\Files\Traits\LoadsAllChildEntries;
@@ -39,11 +40,12 @@ class SoftDeleteEntries
      * Move specified entries to "trash".
      *
      * @param Collection $entries
-     * @return bool|null
+     * @return void
      */
     protected function delete(Collection $entries)
     {
         $entries = $this->loadChildEntries($entries);
-        return $this->entry->whereIn('id', $entries->pluck('id'))->delete();
+        $this->entry->whereIn('id', $entries->pluck('id'))->delete();
+        event(new FileEntriesDeleted($entries->pluck('id')->toArray(), false));
     }
 }

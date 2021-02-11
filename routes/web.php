@@ -16,6 +16,8 @@ Route::group(['prefix' => 'secure'], function () {
     Route::get('reports/envato/earnings', 'ReportsController@envatoEarnings');
     Route::get('reports/tickets/count/daily', 'ReportsController@dailyTicketCount');
     Route::get('reports/tickets/range', 'ReportsController@generateTicketsReport');
+    Route::get('reports/help-center', 'ReportsController@helpCenterReport');
+    Route::get('reports/user/{userId}/searches', 'ReportsController@userSearches');
 
     //USER TAGS
     Route::post('users/{id}/tags/sync', 'UserTagsController@sync');
@@ -27,11 +29,9 @@ Route::group(['prefix' => 'secure'], function () {
     Route::post('users/{id}/emails/attach', 'UserEmailsController@attach');
     Route::post('users/{id}/emails/detach', 'UserEmailsController@detach');
 
-    //USER TICKETS
-    Route::get('users/{userId}/tickets', 'UserTicketsController@index');
-
     //TICKETS
     Route::get('tickets', 'TicketController@index');
+    Route::get('tickets/{tagId}/next-active-ticket', 'TicketController@nextActiveTicket');
     Route::post('tickets', 'TicketController@store');
     Route::put('tickets/{id}', 'TicketController@update');
     Route::post('tickets/merge/{ticket1}/{ticket2}', 'TicketsMergeController@merge');
@@ -45,10 +45,10 @@ Route::group(['prefix' => 'secure'], function () {
     Route::post('search-term', 'SearchTermController@store');
 
     //AGENT SEARCH
-    Route::get('search/all/{query}', 'SearchController@all');
-    Route::get('search/users/{query}', 'SearchController@users');
-    Route::get('search/tickets/{query}', 'SearchController@tickets');
-    Route::get('search/articles/{query}', 'SearchController@articles');
+    Route::get('search/all', 'SearchController@all');
+    Route::get('search/users', 'SearchController@users');
+    Route::get('search/tickets', 'SearchController@tickets');
+    Route::get('search/articles', 'SearchController@articles');
 
     //REPLIES
     Route::get('replies/{id}', 'RepliesController@show');
@@ -67,7 +67,6 @@ Route::group(['prefix' => 'secure'], function () {
 
     //TAGS
     Route::get('tags/agent-mailbox', 'TagController@tagsForAgentMailbox');
-    Route::get('tags', 'TagController@index');
     Route::post('tags', 'TagController@store');
     Route::put('tags/{id}', 'TagController@update');
     Route::delete('tags/delete-multiple', 'TagController@deleteMultiple');
@@ -96,6 +95,7 @@ Route::group(['prefix' => 'secure'], function () {
 
     //HELP CENTER ARTICLES
     Route::get('help-center/articles/{id}', 'ArticleController@show');
+    Route::get('help-center/articles/{article}/download/{hashes}', 'ArticleAttachmentsController@download');
     Route::get('help-center/articles', 'ArticleController@index');
     Route::post('help-center/articles', 'ArticleController@store');
     Route::put('help-center/articles/{id}', 'ArticleController@update');
@@ -115,6 +115,7 @@ Route::group(['prefix' => 'secure'], function () {
 
     //ENVATO
     Route::get('envato/validate-purchase-code', 'EnvatoController@validateCode');
+    Route::post('envato/add-purchase-using-code', 'EnvatoController@addPurchaseUsingCode');
     Route::post('envato/items/import', 'EnvatoController@ImportItems');
 
     //HElP CENTER IMPORT/EXPORT
@@ -124,6 +125,9 @@ Route::group(['prefix' => 'secure'], function () {
 
     //3RD PARTY IMPORT/EXPORT
     Route::get('ticketing/actions/helpscout/import', 'TicketingActionsController@importHelpScoutConversations');
+
+    // APP\NOTIFICATIONSUBSCRIPTION
+    Route::apiResource('notification-subscription', 'NotificationSubscriptionController');
 });
 
 //TICKETS MAIL WEBHOOKS

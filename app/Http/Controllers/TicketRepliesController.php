@@ -9,9 +9,9 @@ use App\Http\Requests\ModifyReplies;
 use App\Services\Ticketing\ReplyRepository;
 use App\Services\Ticketing\TicketRepository;
 use App\Services\Ticketing\TicketReplyCreator;
-use Common\Core\Controller;
+use Common\Core\BaseController;
 
-class TicketRepliesController extends Controller {
+class TicketRepliesController extends BaseController {
 
     /**
      * @var Request
@@ -50,7 +50,7 @@ class TicketRepliesController extends Controller {
     {
         $ticket = Ticket::findOrFail($ticketId);
 
-        $this->authorize([Reply::class, $ticket]);
+        $this->authorize('index', [Reply::class, $ticket]);
 
         $params = $this->request->all();
         $params['ticket_id'] = $ticketId;

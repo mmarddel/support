@@ -42,8 +42,8 @@ class ContactPageMessage extends Notification
         $userEmail = $this->message['email'];
 
         return (new MailMessage)
-            ->subject("New message via $siteName contact page.")
-            ->greeting("New message via $siteName contact page from '$userEmail'")
+            ->subject(__("New message via :siteName contact page.", ['siteName' => $siteName]))
+            ->greeting(__("New message via :siteName contact page from ':userEmail'", ['siteName' => $siteName, 'userEmail' => $userEmail]))
             ->salutation(' ')
             ->from(config('mail.from.address'), config('mail.from.name'))
             ->replyTo($userEmail, $this->message['name'])

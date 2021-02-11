@@ -1,12 +1,14 @@
 <?php namespace App\Services\Reports;
 
-use App\Services\UserRepository;
-use DB;
 use App\Ticket;
 use Carbon\Carbon;
+use Carbon\CarbonPeriod;
+use Common\Auth\Actions\PaginateUsers;
 use Common\Settings\Settings;
-use Illuminate\Support\Collection;
+use DB;
 use Illuminate\Cache\Repository as CacheRepository;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Str;
 
 class TicketsReport
 {
@@ -26,7 +28,7 @@ class TicketsReport
     private $settings;
 
     /**
-     * @var array
+     * @var CarbonPeriod
      */
     private $range;
 
@@ -87,8 +89,10 @@ class TicketsReport
     {
         DB::table('tickets')
             ->select('id', 'user_id', 'created_at', 'closed_at', 'closed_by')
-            ->where('created_at', '>=', $this->range['from'])
-            ->where('created_at', '<=', $this->range['to'])
+            ->whereBetween(
+                'tickets.created_at',
+                [$this->range->getStartDate(), $this->range->getEndDate()]
+            )
             ->orderBy('created_at', 'desc')
             ->chunk($this->chunkSize, function($tickets) {
                 $tickets = $this->prepareTickets($tickets);
@@ -98,13 +102,7 @@ class TicketsReport
         $this->calcAveragesAndPercentages();
     }
 
-    /**
-     * Generate Carbon instances for from and to dates.
-     *
-     * @param array $params
-     * @return array
-     */
-    private function createTimeRange($params)
+    private function createTimeRange(array $params): CarbonPeriod
     {
         $now = Carbon::now();
 
@@ -113,12 +111,12 @@ class TicketsReport
         $fromDay   = isset($params['from_day']) ? (int) $params['from_day'] : $now->day;
         $from      = Carbon::create($fromYear, $fromMonth, $fromDay, 0, 0, 0);
 
-        $to = Carbon::create($fromYear, $fromMonth, $fromDay, 0, 0, 0)->addMonth(1);
+        $to = Carbon::create($fromYear, $fromMonth, $fromDay, 0, 0, 0)->addMonth();
         if (isset($params['to_year'])) $to->year = (int) $params['to_year'];
         if (isset($params['to_month'])) $to->month = (int) $params['to_month'];
         if (isset($params['to_day'])) $to->day = (int) $params['to_day'];
 
-        return ['from' => $from, 'to' => $to];
+        return CarbonPeriod::create($from, $to);
     }
 
     /**
@@ -128,8 +126,8 @@ class TicketsReport
      */
     private function makeCacheKey()
     {
-        return (string) $this->range['from']->timestamp .
-        (string) $this->range['to']->timestamp;
+        return (string) $this->range->getStartDate()->timestamp .
+        (string) $this->range->getEndDate()->timestamp;
     }
 
     /**
@@ -169,9 +167,9 @@ class TicketsReport
         if ( ! $this->report['agents']) {
             $this->report['agents'] = [];
 
-            $this->agents = collect(app(UserRepository::class)->paginateUsers([
+            $this->agents = collect(app(PaginateUsers::class)->execute([
                 'permission' => 'tickets.update',
-                'per_page' => 20
+                'perPage' => 20
             ])->items());
 
             $this->agentsIds = $this->agents->pluck('id');
@@ -236,7 +234,8 @@ class TicketsReport
     private function calcNumberOfSolvedTickets($tickets)
     {
         $this->report['solvedTickets'] += $tickets->filter(function ($ticket) {
-            return $ticket->closed_at->between($this->range['from'], $this->range['to']);
+            return $ticket->tags->contains('name', 'closed') &&
+                $ticket->closed_at->between($this->range->getStartDate(), $this->range->getEndDate());
         })->count();
     }
 
@@ -346,7 +345,7 @@ class TicketsReport
 
             return [
                 'count' => $values->count(),
-                'name'  => str_limit($name, 18),
+                'name'  => Str::limit($name, 18),
             ];
         })->each(function($tag) {
             //if statistics for this tag already exist, we'll need to sum them
@@ -363,18 +362,14 @@ class TicketsReport
      *
      * @param Collection $tickets
      */
-    private function calcDailyTicketCounts($tickets) {
-
+    private function calcDailyTicketCounts($tickets)
+    {
         $tickets->map(function($ticket) {
             return ['monthDay' => (string)$ticket->created_at->month.'.'.(string)$ticket->created_at->day];
         })
         ->groupBy('monthDay', true)
         ->each(function($val, $monthDay) {
-            if (isset($this->report['dailyCounts'][$monthDay])) {
-                $this->report['dailyCounts'][$monthDay] += $val->count();
-            } else {
-                $this->report['dailyCounts'][$monthDay] = $val->count();
-            }
+            $this->report['dailyCounts'][$monthDay]['count'] += $val->count();
         })->toArray();
     }
 
@@ -557,7 +552,7 @@ class TicketsReport
             'newTickets' => 0,
             'solvedTickets' => 0,
             'openTickets' => 0,
-            'dailyCounts' => null,
+            'dailyCounts' => [],
             'tags'   => null,
             'agents' => null,
             'avgResponseTime' => [],
@@ -581,10 +576,18 @@ class TicketsReport
             '12-14' => 0, '14-16' => 0, '16-18' => 0, '18-20' => 0, '20-22' => 0, '22-24' => 0
         ]]);
 
+        foreach ($this->range as $date) {
+            $key = (string)$date->month.'.'.(string)$date->day;
+            $template['dailyCounts'][$key] = [
+                'label' => $date->format('M, d'),
+                'count' => 0
+            ];
+        }
+
         $sunday = Carbon::now()->endOfWeek();
 
         foreach($template['hourlyCounts']['data'] as $k => $v) {
-            $template['hourlyCounts']['data'][$k]['day'] = str_limit(
+            $template['hourlyCounts']['data'][$k]['day'] = Str::limit(
                 $sunday->addDays(1)->formatLocalized('%a'), 5
             );
         }

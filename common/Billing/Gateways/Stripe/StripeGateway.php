@@ -1,12 +1,13 @@
 <?php namespace Common\Billing\Gateways\Stripe;
 
-use Illuminate\Http\Request;
-use Omnipay\Omnipay;
 use App\User;
-use Omnipay\Stripe\Gateway;
 use Common\Billing\GatewayException;
-use Omnipay\Common\Exception\InvalidCreditCardException;
 use Common\Billing\Gateways\Contracts\GatewayInterface;
+use Illuminate\Http\Request;
+use Illuminate\Support\Arr;
+use Omnipay\Common\Exception\InvalidCreditCardException;
+use Omnipay\Omnipay;
+use Omnipay\Stripe\Gateway;
 
 class StripeGateway implements GatewayInterface
 {
@@ -83,10 +84,21 @@ class StripeGateway implements GatewayInterface
             $params['email'] = $user->email;
         }
 
-        $response = $this->gateway->createCard($params)->send();
+        $request = $this->gateway->createCard($params);
+        $response = $request->sendData(array_merge(
+            $request->getData(),
+            $user->stripe_id ? [] : ['email' => $user->email, 'name' => $user->display_name]
+        ));
 
         if ( ! $response->isSuccessful()) {
             $data = $response->getData();
+
+            // customer is missing on stripe when we have stripe id for user set locally
+            // possibly because stripe mode was switched from test to live or vice versa
+            if (Arr::get($data, 'error.code') === 'resource_missing' && Arr::get($data, 'error.param') === 'customer') {
+                $user->fill(['stripe_id' => null])->save();
+                return $this->addCard($user, $token);
+            }
 
             //if card validation fails on stripe, throw exception so we can show message to user
             if (isset($data['error']['type']) && $data['error']['type'] === 'card_error') {
@@ -119,10 +131,10 @@ class StripeGateway implements GatewayInterface
     {
         $response = $this->gateway->updateCustomer([
             'customerReference' => $user->stripe_id,
-        ])->sendData(['default_source' => $cardReference]);
+        ])->sendData(['default_source' => $cardReference, 'expand' => ['sources']]);
 
-        //default source
-        $cardData = array_first($response->getData()['sources']['data'], function($card) use($cardReference) {
+        // default source
+        $cardData = Arr::first($response->getData()['sources']['data'], function($card) use($cardReference) {
             return $card['id'] === $cardReference;
         });
 

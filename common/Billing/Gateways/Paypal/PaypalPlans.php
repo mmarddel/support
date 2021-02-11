@@ -1,6 +1,7 @@
 <?php namespace Common\Billing\Gateways\Paypal;
 
 use Common\Billing\BillingPlan;
+use Illuminate\Support\Arr;
 use Omnipay\PayPal\RestGateway;
 use Common\Billing\GatewayException;
 use Common\Billing\Gateways\Contracts\GatewayPlansInterface;
@@ -39,7 +40,11 @@ class PaypalPlans implements GatewayPlansInterface
 
             $paypalPlan = $response->getData();
 
-            return empty($paypalPlan) ? null : $paypalPlan;
+            if (empty($paypalPlan) || ! $response->isSuccessful()) {
+                return null;
+            } else {
+                return $paypalPlan;
+            }
         }
 
         // legacy, before paypal plan ID was stored on billing plan model
@@ -57,10 +62,13 @@ class PaypalPlans implements GatewayPlansInterface
         });
 
         // found a match
-        if ($paypalPlan) return $paypalPlan;
+        if ($paypalPlan) {
+            return $paypalPlan;
+        }
 
         // if there are more plans to paginate, do a recursive loop
-        if ($page < (int) $response->getData()['total_pages']) {
+        $totalPages = Arr::get($response->getData(), 'total_pages', 1);
+        if ($page < (int) $totalPages) {
             return $this->find($plan, $page + 1);
         }
 
@@ -83,7 +91,7 @@ class PaypalPlans implements GatewayPlansInterface
 
         // legacy, before paypal plan ID was stored on billing plan model
         if ( ! $paypalPlan = $this->find($plan)) {
-            throw new GatewayException("Could not find plan '{$plan->name}' on paypal");
+            throw new GatewayException("Could not find plan '{$plan->name}' on paypal. Try to sync plans from 'admin -> plans' page.");
         }
 
         return $paypalPlan['id'];
@@ -109,7 +117,7 @@ class PaypalPlans implements GatewayPlansInterface
                     'frequency'          => strtoupper($plan->interval),
                     'frequency_interval' => $plan->interval_count,
                     'cycles'             => 0,
-                    'amount'             => ['value' => $plan->amount, 'currency' => strtoupper($plan->currency)],
+                    'amount'             => ['value' => number_format($plan->amount, 2), 'currency' => strtoupper($plan->currency)], // paypal does not accept floats, need to convert amount to string
                 ],
             ],
             'merchant_preferences' => [

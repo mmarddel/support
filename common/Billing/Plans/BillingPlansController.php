@@ -1,15 +1,17 @@
 <?php namespace Common\Billing\Plans;
 
 use Common\Billing\BillingPlan;
+use Common\Billing\GatewayException;
 use Common\Billing\Gateways\Contracts\GatewayInterface;
 use Common\Billing\Gateways\GatewayFactory;
+use Common\Billing\Plans\Actions\CrupdateBillingPlan;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Common\Core\Controller;
+use Common\Core\BaseController;
 use Common\Database\Paginator;
 use Illuminate\Http\Response;
 
-class BillingPlansController extends Controller
+class BillingPlansController extends BaseController
 {
     /**
      * @var BillingPlan
@@ -39,23 +41,21 @@ class BillingPlansController extends Controller
     }
 
     /**
-     * Display a listing of the resource.
-     *
      * @return JsonResponse
      */
     public function index()
     {
         $this->authorize('index', BillingPlan::class);
 
-        $pagination = (new Paginator($this->plan))->with('parent')
-            ->paginate($this->request->all());
+        $paginator = (new Paginator($this->plan, $this->request->all()))
+            ->with(['parent', 'permissions']);
+        $paginator->filterColumns = ['currency', 'interval', 'parent_id', 'recommended'];
+        $pagination = $paginator->paginate();
 
         return $this->success(['pagination' => $pagination]);
     }
 
     /**
-     * Store a newly created resource in storage.
-     *
      * @return BillingPlan|JsonResponse
      */
     public function store()
@@ -68,77 +68,74 @@ class BillingPlansController extends Controller
             'interval' => 'required_unless:free,1|string|max:255',
             'amount' => 'required_unless:free,1|min:0',
             'permissions' => 'array',
-            'show_permissions' => 'required|in:0,1',
-            'recommended' => 'required|in:0,1',
+            'show_permissions' => 'required|boolean',
+            'recommended' => 'required|boolean',
             'position' => 'required|integer',
             'available_space' => 'nullable|integer|min:1'
         ]);
 
-        $data = $this->request->all();
-        $data['uuid'] = str_random(36);
-
-        $plan = $this->plan->create($data);
-
-        if ( ! $plan->free) {
-            $this->factory->getEnabledGateways()->each(function(GatewayInterface $gateway) use($plan) {
-                $gateway->plans()->create($plan);
-            });
-        }
+        $plan = app(CrupdateBillingPlan::class)->execute($this->request->all());
 
         return $this->success(['plan' => $plan]);
     }
 
     /**
-     * Update the specified resource in storage.
-     *
-     * @param  int $id
+     * @param BillingPlan $billingPlan
      * @return Response
      */
-    public function update($id)
+    public function update(BillingPlan $billingPlan)
     {
-        $this->authorize('update', BillingPlan::class);
+        $this->authorize('update', $billingPlan);
 
         $this->validate($this->request, [
             'name' => 'required|string|max:250',
             'currency' => 'string|max:255',
             'interval' => 'string|max:255',
-            'amount' => 'integer|min:0',
+            'amount' => 'min:0',
             'permissions' => 'array',
             'show_permissions' => 'boolean',
             'recommended' => 'boolean',
+            'parent_id' => "nullable|integer|notIn:$billingPlan->id"
         ]);
 
-        $plan = $this->plan->findOrFail($id)->fill($this->request->except('parent'));
-        $plan->save();
+        $plan = app(CrupdateBillingPlan::class)->execute(
+            $this->request->except('parent'), $billingPlan
+        );
 
         return $this->success(['plan' => $plan]);
     }
 
     /**
-     * Remove the specified resource from storage.
-     *
-     * @return Response
+     * @param string $ids
+     * @return JsonResponse
      */
-    public function destroy()
+    public function destroy($ids)
     {
-        $this->authorize('destroy', BillingPlan::class);
+        $planIds = explode(',', $ids);
+        $this->authorize('destroy', [BillingPlan::class, $planIds]);
 
-        $this->validate($this->request, [
-            'ids' => 'required|array'
-        ]);
+        $plans = $this->plan->withCount('subscriptions')->whereIn('id', $planIds)->get();
+        $couldNotDelete = [];
 
-        foreach ($this->request->get('ids') as $id) {
-            $plan = $this->plan->find($id);
-            if (is_null($plan)) continue;
+        foreach ($plans as $plan) {
+           if ($plan->subscriptions_count) {
+               $couldNotDelete[] = $plan->name;
+               continue;
+           }
 
-            $plan->delete();
+           $plan->delete();
 
-            $this->factory->getEnabledGateways()->each(function(GatewayInterface $gateway) use($plan) {
-                $gateway->plans()->delete($plan);
-            });
+           $this->factory->getEnabledGateways()->each(function(GatewayInterface $gateway) use($plan) {
+               $gateway->plans()->delete($plan);
+           });
         }
 
-        return $this->success();
+        if ( ! empty($couldNotDelete)) {
+            $couldNotDelete = implode(', ', $couldNotDelete);
+            return $this->error(__("Could not delete plans: ':planNames', because they have active subscriptions.", ['planNames' => $couldNotDelete]));
+        } else {
+            return $this->success();
+        }
     }
 
     /**
@@ -150,12 +147,16 @@ class BillingPlansController extends Controller
 
         $plans = $this->plan->where('free', false)->orderBy('parent_id', 'asc')->get();
 
-        $this->factory->getEnabledGateways()->each(function(GatewayInterface $gateway) use($plans) {
-            $plans->each(function(BillingPlan $plan) use($gateway) {
-                if ($gateway->plans()->find($plan)) return;
-                $gateway->plans()->create($plan);
-            });
-        });
+        foreach ($this->factory->getEnabledGateways() as $gateway) {
+            foreach ($plans as $plan) {
+                if ($gateway->plans()->find($plan)) continue;
+                try {
+                    $gateway->plans()->create($plan);
+                } catch (GatewayException $e) {
+                    return $this->error("Could not sync \"$plan->name\" plan: {$e->getMessage()}");
+                }
+            }
+        }
 
         return $this->success();
     }

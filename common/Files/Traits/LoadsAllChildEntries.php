@@ -16,7 +16,8 @@ trait LoadsAllChildEntries
      */
     protected function loadChildEntries(Collection $entries, $withTrashed = false)
     {
-        $builder = FileEntry::select('id', 'file_name', 'type');
+        /** @var FileEntry $builder */
+        $builder = FileEntry::select(['id', 'file_name', 'type']);
 
         // load parent entries, if we got only IDs passed in
         if (is_numeric($entries->first())) {
@@ -29,8 +30,8 @@ trait LoadsAllChildEntries
 
         $entries->each(function (FileEntry $entry) use ($builder) {
             if ($entry->type === 'folder') {
-                $path = $entry->getOriginal('path');
-                $builder->orWhere('path', 'LIKE', "$path/%");
+                $path = $entry->getRawOriginal('path');
+                $builder ->orWhere('path', 'LIKE', "$path/%");
             }
         });
 

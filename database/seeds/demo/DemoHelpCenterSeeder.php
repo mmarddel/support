@@ -137,7 +137,7 @@ class DemoHelpCenterSeeder extends Seeder
 
             foreach ($pivots as $pivot) {
                 $newPivot = ['article_id' => $pivot['article_id'], 'category_id' => $child->parent_id];
-                $exists = array_first($allPivots, function($p) use($newPivot) {
+                $exists = Arr::first($allPivots, function($p) use($newPivot) {
                     return $p['article_id'] === $newPivot['article_id'] && $p['category_id'] === $newPivot['category_id'];
                 });
                 if ($exists) continue;

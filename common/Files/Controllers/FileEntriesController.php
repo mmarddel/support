@@ -2,21 +2,25 @@
 
 use App;
 use Auth;
+use Common\Core\BaseController;
 use Common\Database\Paginator;
-use Common\Files\Actions\CreateFileEntry;
-use Common\Files\Actions\Storage\StorePrivateUpload;
-use Common\Files\Events\FileEntriesDeleted;
-use Common\Files\Events\FileEntryCreated;
-use Common\Files\Requests\UploadFile;
+use Common\Files\Actions\Deletion\DeleteEntries;
+use Common\Files\Actions\Deletion\PermanentlyDeleteEntries;
+use Common\Files\Actions\Deletion\SoftDeleteEntries;
+use Common\Files\Actions\UploadFile;
 use Common\Files\FileEntry;
+use Common\Files\Requests\UploadFileRequest;
+use Common\Files\Response\FileResponseFactory;
+use Common\Files\Traits\TransformsFileEntryResponse;
+use Illuminate\Contracts\Filesystem\FileNotFoundException;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Common\Core\Controller;
-use Common\Files\Actions\Deletion\SoftDeleteEntries;
-use Common\Files\Response\FileContentResponseCreator;
-use Common\Files\Actions\Deletion\PermanentlyDeleteEntries;
+use Arr;
 
-class FileEntriesController extends Controller {
+class FileEntriesController extends BaseController {
+
+    use TransformsFileEntryResponse;
 
     /**
      * @var Request
@@ -44,23 +48,29 @@ class FileEntriesController extends Controller {
     public function index()
     {
         $params = $this->request->all();
-        $params['userId'] = $this->request->get('userId', Auth::id());
+        $params['userId'] = $this->request->get('userId');
 
         $this->authorize('index', FileEntry::class);
 
-        $pagination = (new Paginator($this->entry))
-            ->with('users')
-            ->paginate($params);
+        $paginator = (new Paginator($this->entry, $params));
+
+        $paginator->filterColumns = ['type', 'public', 'password', 'created_at', 'owner' => function(Builder $builder, $userId) {
+            if ($userId) {
+                $builder->whereOwner($userId);
+            }
+        }];
+
+        $pagination = $paginator->with('users')->paginate();
 
         return $this->success(['pagination' => $pagination]);
     }
 
     /**
      * @param int $id
-     * @param FileContentResponseCreator $response
-     * @return mixed
+     * @param FileResponseFactory $response
+     * @return mixed|void
      */
-    public function show($id, FileContentResponseCreator $response)
+    public function show($id, FileResponseFactory $response)
     {
         if ((int) $id === 0) {
             $id = $this->entry->decodeHash($id);
@@ -70,38 +80,36 @@ class FileEntriesController extends Controller {
 
         $this->authorize('show', $entry);
 
-        return $response->create($entry);
+        try {
+            return $response->create($entry);
+        } catch (FileNotFoundException $e) {
+            abort(404);
+        }
     }
 
     /**
-     * @param UploadFile $request
+     * @param UploadFileRequest $request
      * @return JsonResponse
-     * @throws \Illuminate\Auth\Access\AuthorizationException
      */
-    public function store(UploadFile $request)
+    public function store(UploadFileRequest $request)
     {
-        $path = $this->request->get('path');
         $parentId = $request->get('parentId');
         $uploadedFile = $this->request->file('file');
 
         $this->authorize('store', [FileEntry::class, $parentId]);
-        
-        $fileEntry = app(CreateFileEntry::class)->execute(
-            $uploadedFile,
-            ['parent_id' => $parentId, 'path' => $path]
+
+        $params = $this->request->except('file');
+        $fileEntry = app(UploadFile::class)
+            ->execute(Arr::get($params, 'disk', 'private'), $uploadedFile, $params);
+
+        return $this->success(
+            $this->transformFileEntryResponse(['fileEntry' => $fileEntry->load('users')], $params), 201
         );
-
-        app(StorePrivateUpload::class)->execute($fileEntry, $uploadedFile);
-
-        event(new FileEntryCreated($fileEntry, $this->request->except('file')));
-
-        return $this->success(['fileEntry' => $fileEntry->load('users')], 201);
     }
 
     /**
      * @param int $entryId
      * @return JsonResponse
-     * @throws \Illuminate\Auth\Access\AuthorizationException
      */
     public function update($entryId)
     {
@@ -120,10 +128,7 @@ class FileEntriesController extends Controller {
     }
 
     /**
-     * Delete specified file entries from disk and database.
-     *
      * @return JsonResponse
-     * @throws \Illuminate\Auth\Access\AuthorizationException
      */
     public function destroy()
     {
@@ -131,12 +136,13 @@ class FileEntriesController extends Controller {
         $userId = Auth::user()->id;
 
         $this->validate($this->request, [
-            'entryIds' => 'requiredWithout:emptyTrash|array|exists:file_entries,id',
+            'entryIds' => 'requiredWithoutAll:emptyTrash,paths|array|exists:file_entries,id',
+            'paths' => 'requiredWithoutAll:emptyTrash,entryIds|array',
             'deleteForever' => 'boolean',
             'emptyTrash' => 'boolean'
         ]);
 
-        //get all soft deleted entries for user, if we are emptying trash
+        // get all soft deleted entries for user, if we are emptying trash
         if ($this->request->get('emptyTrash')) {
             $entryIds = $this->entry
                 ->whereOwner($userId)
@@ -145,17 +151,11 @@ class FileEntriesController extends Controller {
                 ->toArray();
         }
 
-        $this->authorize('destroy', [FileEntry::class, $entryIds]);
-
-        $permanent = $this->request->get('deleteForever') || $this->request->get('emptyTrash');
-
-        if ($permanent) {
-            App::make(PermanentlyDeleteEntries::class)->execute($entryIds);
-        } else {
-            App::make(SoftDeleteEntries::class)->execute($entryIds);
-        }
-
-        event(new FileEntriesDeleted($entryIds, $permanent));
+        app(DeleteEntries::class)->execute([
+            'paths' => $this->request->get('paths'),
+            'entryIds' => $entryIds,
+            'soft' => !$this->request->get('deleteForever') && !$this->request->get('emptyTrash'),
+        ]);
 
         return $this->success();
     }

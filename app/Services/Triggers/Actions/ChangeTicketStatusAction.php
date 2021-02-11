@@ -28,9 +28,10 @@ class ChangeTicketStatusAction implements TriggerActionInterface {
      *
      * @param Ticket $ticket
      * @param Action $action
+     * @param \App\Trigger $trigger
      * @return Ticket
      */
-    public function perform(Ticket $ticket, Action $action)
+    public function perform(Ticket $ticket, Action $action, \App\Trigger $trigger)
     {
         $statusName = json_decode($action->pivot['action_value'])->status_name;
 

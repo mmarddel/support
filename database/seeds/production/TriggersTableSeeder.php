@@ -6,6 +6,7 @@ use App\Condition;
 use Carbon\Carbon;
 use Illuminate\Database\Seeder;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Arr;
 
 class TriggersTableSeeder extends Seeder
 {
@@ -51,9 +52,10 @@ class TriggersTableSeeder extends Seeder
     ];
 
     public $conditions = [
+        'event:type'          => ['type' => 'event:type', 'name' => 'Event: Type', 'operators' => [9, 10]],
         'ticket:subject'      => ['type' => 'ticket:subject', 'name' => 'Ticket: Subject', 'operators' => [0,1,2,3,4,5,6]],
         'ticket:body'         => ['type' => 'ticket:body', 'name' => 'Ticket: Body', 'operators' => [0,1,2,3]],
-        'ticket:status'       => ['type' => 'ticket:status', 'name' => 'Ticket: Status', 'operators' => [9, 10]],
+        'ticket:status'       => ['type' => 'ticket:status', 'name' => 'Ticket: Status', 'operators' => [9, 10, 11, 12, 13, 14, 15, 16]],
         'ticket:category'     => ['type' => 'ticket:category', 'name' => 'Ticket: Category', 'operators' => [0,1,2,3,4,5,6,9,10]],
         'ticket:uploads'      => ['type' => 'ticket:uploads', 'name' => 'Ticket: Number of Attachments', 'operators' => [4, 5, 7, 8]],
         'ticket:assignee'     => ['type' => 'ticket:assignee', 'name' => 'Ticket: Assignee', 'operators' => [9, 10, 11, 12, 13, 14, 15, 16]],
@@ -88,8 +90,6 @@ class TriggersTableSeeder extends Seeder
     ];
 
     /**
-     * ConditionsTableSeeder constructor.
-     *
      * @param Operator  $operator
      * @param Condition $condition
      * @param Action    $action

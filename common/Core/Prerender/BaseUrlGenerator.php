@@ -2,21 +2,22 @@
 
 namespace Common\Core\Prerender;
 
-use Common\Pages\Page;
+use Common\Pages\CustomPage;
 use Common\Core\Contracts\AppUrlGenerator;
+use Illuminate\Support\Str;
 
 class BaseUrlGenerator implements AppUrlGenerator
 {
     const SEPARATOR = '-';
 
     /**
-     * @param array|Page $page
+     * @param array|CustomPage $page
      * @return string
      */
     public function page($page)
     {
-        $slug = str_slug($page['slug']);
-        return url("titles/{$page['id']}/$slug");
+        $slug = slugify($page['slug']);
+        return url("pages/{$page['id']}/$slug");
     }
 
     /**
@@ -36,6 +37,6 @@ class BaseUrlGenerator implements AppUrlGenerator
      */
     public function __call($name, $arguments)
     {
-        return url(kebab_case($name));
+        return url(Str::kebab($name));
     }
 }

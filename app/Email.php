@@ -3,6 +3,8 @@
 use Illuminate\Database\Eloquent\Model;
 
 /**
+ * App\Email
+ *
  * @property integer $id
  * @property string $name
  * @property string $value
@@ -12,6 +14,12 @@ use Illuminate\Database\Eloquent\Model;
  * @property string $address
  * @property int $user_id
  * @property-read \App\User $user
+ * @method static \Illuminate\Database\Eloquent\Builder|\App\Email whereAddress($value)
+ * @method static \Illuminate\Database\Eloquent\Builder|\App\Email whereId($value)
+ * @method static \Illuminate\Database\Eloquent\Builder|\App\Email whereUserId($value)
+ * @method static \Illuminate\Database\Eloquent\Builder|\App\Email newModelQuery()
+ * @method static \Illuminate\Database\Eloquent\Builder|\App\Email newQuery()
+ * @method static \Illuminate\Database\Eloquent\Builder|\App\Email query()
  */
 class Email extends Model {
 

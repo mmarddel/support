@@ -3,9 +3,9 @@
 use App\Article;
 use Illuminate\Http\Request;
 use App\Services\HelpCenter\ArticleRepository;
-use Common\Core\Controller;
+use Common\Core\BaseController;
 
-class ArticleFeedbackController extends Controller
+class ArticleFeedbackController extends BaseController
 {
     /**
      * Laravel request instance.

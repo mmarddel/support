@@ -3,11 +3,11 @@
 namespace App\Http\Controllers;
 
 use App\SearchTerm;
-use Common\Core\Controller;
-use Illuminate\Http\Request;
 use Axisofstevil\StopWords\Filter;
+use Common\Core\BaseController;
+use Illuminate\Http\Request;
 
-class SearchTermController extends Controller
+class SearchTermController extends BaseController
 {
     /**
      * @var SearchTerm
@@ -31,7 +31,7 @@ class SearchTermController extends Controller
 
     public function store()
     {
-        $normalizedTerm = str_slug(
+        $normalizedTerm = slugify(
             (new Filter())->cleanText($this->request->get('term'))
         );
 

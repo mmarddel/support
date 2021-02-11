@@ -3,29 +3,30 @@
 namespace Common\Admin\Analytics\Actions;
 
 use Carbon\Carbon;
+use Google_Service_Analytics_GaData;
 use Illuminate\Support\Collection;
-use Spatie\LaravelAnalytics\LaravelAnalytics;
+use Spatie\Analytics\Analytics;
+use Spatie\Analytics\Period;
 
 class GetGoogleAnalyticsData implements GetAnalyticsData
 {
     /**
-     * @var LaravelAnalytics
+     * @var Analytics
      */
     private $analytics;
 
     /**
-     * @param LaravelAnalytics $analytics
+     * @param Analytics $analytics
      */
-    public function __construct(LaravelAnalytics $analytics)
+    public function __construct(Analytics $analytics)
     {
         $this->analytics = $analytics;
-        $this->registerCollectionMacros();
     }
 
-    public function execute()
+    public function execute($channel)
     {
         return [
-            'browsers' =>  $this->analytics->getTopBrowsers(7),
+            'browsers' =>  $this->analytics->fetchTopBrowsers(Period::days(7)),
             'countries' => $this->getCountries(),
             'weeklyPageViews' => $this->weeklyPageViews(),
             'monthlyPageViews' => $this->monthlyPageViews(),
@@ -50,21 +51,23 @@ class GetGoogleAnalyticsData implements GetAnalyticsData
 
     private function getPageViews(Carbon $start, Carbon $end)
     {
-        $data = $this->analytics->getVisitorsAndPageViewsForPeriod($start, $end);
-
-        return $data->map(function($item) {
-            return [
-                'pageViews' => $item['pageViews'],
-                'date' => $item['date']->getTimestamp()
-            ];
-        });
+        return $this->analytics->fetchVisitorsAndPageViews(
+            Period::create($start, $end)
+        )->groupBy(function($item) {
+            return $item['date']->format('d'); // grouping by years
+        })->map(function(Collection $dateGroup) {
+            return $dateGroup->reduce(function ($result, $item) {
+                $result['pageViews'] += $item['pageViews'];
+                return $result;
+            }, ['date' => $dateGroup[0]['date']->getTimestamp(), 'pageViews' => 0]);
+        })->values();
     }
 
     private function getCountries($maxResults = 6)
     {
+        /** @var Google_Service_Analytics_GaData $answer */
         $answer = $this->analytics->performQuery(
-            Carbon::now()->startOfWeek(),
-            Carbon::now()->endOfWeek(),
+            Period::create(Carbon::now()->startOfWeek(), Carbon::now()->endOfWeek()),
             'ga:sessions',
             ['dimensions' => 'ga:country', 'sort' => '-ga:sessions']
         );
@@ -81,20 +84,12 @@ class GetGoogleAnalyticsData implements GetAnalyticsData
         $countries = new Collection(array_slice($pagesData, 0, $maxResults - 1));
 
         if (count($pagesData) > $maxResults) {
-            $otherCountries = new Collection(array_slice($pagesData, $maxResults - 1));
-            $otherCountriesCount = array_sum(Collection::make($otherCountries->lists('sessions'))->toArray());
+            $otherCountries = collect(array_slice($pagesData, $maxResults - 1));
+            $otherCountriesCount = array_sum(Collection::make($otherCountries->pluck('sessions'))->toArray());
 
             $countries->put(null, ['country' => 'other', 'sessions' => $otherCountriesCount]);
         }
 
         return $countries;
-    }
-
-    private function registerCollectionMacros()
-    {
-        // laravel analytics page needs legacy "lists" method
-        Collection::macro('lists', function($value, $key = null) {
-            return self::pluck($value, $key);
-        });
     }
 }

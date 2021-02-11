@@ -2,9 +2,9 @@
 
 use App\Condition;
 use Illuminate\Database\Eloquent\Collection;
-use Common\Core\Controller;
+use Common\Core\BaseController;
 
-class ConditionsController extends Controller
+class ConditionsController extends BaseController
 {
     /**
      * Condition model instance.

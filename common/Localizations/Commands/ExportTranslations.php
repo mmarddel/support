@@ -1,7 +1,13 @@
 <?php namespace Common\Localizations\Commands;
 
+use App\Services\Admin\GetAnalyticsHeaderData;
+use App\User;
+use Auth;
+use Common\Auth\Permissions\Permission;
+use Common\Core\Values\ValueLists;
 use Illuminate\Console\Command;
 use Illuminate\Filesystem\Filesystem;
+use Illuminate\Support\Arr;
 
 class ExportTranslations extends Command
 {
@@ -21,7 +27,6 @@ class ExportTranslations extends Command
     private $fs;
 
     /**
-     * Create a new command instance.
      * @param Filesystem $fs
      */
     public function __construct(Filesystem $fs)
@@ -40,12 +45,48 @@ class ExportTranslations extends Command
     {
         $messages = array_merge(
             $this->getCustomValidationMessages(),
-            $this->GetDefaultValidationMessages()
+            $this->GetDefaultValidationMessages(),
+            $this->getDefaultMenuLabels(),
+            $this->getAnalyticsHeaderLabels(),
+            $this->getPermissionNamesAndDescriptions(),
         );
 
         $this->fs->put(resource_path('server-translations.json'), json_encode($messages));
 
         $this->info('Translation lines exported as json.');
+    }
+
+    private function getAnalyticsHeaderLabels()
+    {
+        if (class_exists(GetAnalyticsHeaderData::class)) {
+            $data = app(GetAnalyticsHeaderData::class)->execute(null);
+            return collect($data)
+                ->pluck('name')
+                ->flatten()
+                ->mapWithKeys(function($key) {
+                    return [$key => $key];
+                })->toArray();
+        }
+
+        return [];
+    }
+    
+    private function getDefaultMenuLabels()
+    {
+        $menus = Arr::first(config('common.default-settings'), function($setting) {
+            return $setting['name'] === 'menus';
+        });
+
+        if ($menus) {
+            return collect(json_decode($menus['value'], true))
+                ->pluck('items.*.label')
+                ->flatten()
+                ->mapWithKeys(function($key) {
+                    return [$key => $key];
+                })->toArray();
+        }
+
+        return [];
     }
 
     /**
@@ -84,7 +125,7 @@ class ExportTranslations extends Command
      */
     private function GetDefaultValidationMessages()
     {
-        $paths = $this->fs->files(resource_path('lang/english'));
+        $paths = $this->fs->files(resource_path('lang/en'));
 
         $compiled = [];
 
@@ -108,5 +149,20 @@ class ExportTranslations extends Command
         }
 
         return $compiled;
+    }
+
+    private function getPermissionNamesAndDescriptions()
+    {
+        Auth::login(User::findAdmin());
+        $lines = app(ValueLists::class)->permissions()
+            ->map(function(Permission $permission) {
+                return [
+                    $permission['display_name'],
+                    $permission['group'],
+                    $permission['description'],
+                ];
+            })->flatten(1)->unique()->toArray();
+
+        return array_combine($lines, $lines);
     }
 }

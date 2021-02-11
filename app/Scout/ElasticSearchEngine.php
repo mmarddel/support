@@ -1,10 +1,15 @@
 <?php namespace App\Scout;
 
+use Arr;
+use Elasticsearch\Common\Exceptions\NoNodesAvailableException;
+use Illuminate\Database\Eloquent\Model;
 use Laravel\Scout\Builder;
 use Elasticsearch\ClientBuilder;
 use Laravel\Scout\Engines\Engine;
 use Illuminate\Support\Collection;
 use Elasticsearch\Client as Elastic;
+use Monolog\Handler\StreamHandler;
+use Monolog\Logger;
 
 class ElasticSearchEngine extends Engine
 {
@@ -27,8 +32,11 @@ class ElasticSearchEngine extends Engine
      */
     public function __construct()
     {
+        $handler = new StreamHandler(storage_path('logs/elastic.log'));
+        $logObject = new Logger('log');
+        $logObject->pushHandler($handler);
         $this->elastic = ClientBuilder::create()
-            ->setLogger(ClientBuilder::defaultLogger(storage_path('logs/elastic.log')))
+            ->setLogger($logObject)
             ->build();
     }
 
@@ -57,7 +65,11 @@ class ElasticSearchEngine extends Engine
             ];
         });
 
-        $this->elastic->bulk($params);
+        try {
+            $this->elastic->bulk($params);
+        } catch (NoNodesAvailableException $e) {
+            // elastic search is not running, no need to error out
+        }
     }
 
     /**
@@ -87,7 +99,7 @@ class ElasticSearchEngine extends Engine
     /**
      * Perform the given search on the engine.
      *
-     * @param  \Laravel\Scout\Builder  $builder
+     * @param Builder $builder
      * @return Collection
      */
     public function search(Builder $builder)
@@ -102,7 +114,7 @@ class ElasticSearchEngine extends Engine
     /**
      * Perform the given search on the engine.
      *
-     * @param  \Laravel\Scout\Builder  $builder
+     * @param Builder $builder
      * @param  int  $perPage
      * @param  int  $page
      * @return Collection
@@ -116,7 +128,7 @@ class ElasticSearchEngine extends Engine
             'size' => $perPage,
         ]);
 
-        $result['nbPages'] = $result['hits']['total']/$perPage;
+        $result['nbPages'] = $this->getTotalCount($result)/$perPage;
 
         return $result;
     }
@@ -205,7 +217,7 @@ class ElasticSearchEngine extends Engine
     protected function sorting(Builder $builder)
     {
         return collect($builder->orders)->map(function ($value) {
-            return [array_get($value, 'column') => ['order' => array_get($value, 'direction')]];
+            return [Arr::get($value, 'column') => ['order' => Arr::get($value, 'direction')]];
         })->values()->all();
     }
 
@@ -213,7 +225,7 @@ class ElasticSearchEngine extends Engine
      * Pluck and return the primary keys of the given results.
      *
      * @param  mixed  $results
-     * @return \Illuminate\Support\Collection
+     * @return Collection
      */
     public function mapIds($results)
     {
@@ -223,11 +235,12 @@ class ElasticSearchEngine extends Engine
     /**
      * Map the given results to instances of the given model.
      *
-     * @param  mixed  $results
-     * @param  \Illuminate\Database\Eloquent\Model  $model
+     * @param Builder $builder
+     * @param mixed $results
+     * @param Model $model
      * @return Collection
      */
-    public function map($results, $model)
+    public function map(Builder $builder, $results, $model)
     {
         if ($results['hits']['total'] === 0) {
             return Collection::make();
@@ -251,6 +264,18 @@ class ElasticSearchEngine extends Engine
      */
     public function getTotalCount($results)
     {
-        return $results['hits']['total'];
+        return is_array($results['hits']['total']) ? $results['hits']['total']['value'] : $results['hits']['total'];
+    }
+
+    /**
+     * @inheritDoc
+     */
+    public function flush($model)
+    {
+        $query = $model::usesSoftDelete() ? $model->withTrashed() : $model->newQuery();
+
+        $query
+            ->orderBy($model->getScoutKeyName())
+            ->unsearchable();
     }
 }

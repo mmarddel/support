@@ -1,6 +1,6 @@
 <?php namespace App\Services\Ticketing;
 
-use Common\Files\FileEntry;
+use Carbon\Carbon;
 use DB;
 use Auth;
 use App\Tag;
@@ -8,10 +8,12 @@ use App\Reply;
 use App\Ticket;
 use Common\Settings\Settings;
 use Illuminate\Database\Query\JoinClause;
-use Illuminate\Support\Arr;
+use Arr;
 use App\Services\TagRepository;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
+use Illuminate\Support\Collection;
+use Str;
 
 class TicketRepository {
 
@@ -86,7 +88,7 @@ class TicketRepository {
      * Find ticket by id.
      *
      * @param $id
-     * @return Ticket
+     * @return Ticket|Collection
      */
     public function find($id)
     {
@@ -172,7 +174,7 @@ class TicketRepository {
      */
     public function loadConversation(Ticket $ticket)
     {
-        $ticket->load('tags.categories', 'user.purchase_codes', 'assignee');
+        $ticket->load('tags.categories', 'user.purchase_codes', 'user.tags', 'assignee');
 
         $ticket->setRelation('replies', $this->replyRepository->getRepliesForTicket($ticket->id, 10));
 
@@ -184,57 +186,6 @@ class TicketRepository {
         $ticket->created_at_month     = $ticket->created_at->formatLocalized('%B %d');
 
         return $ticket;
-    }
-
-    /**
-     * Get a list of tickets filtered by current user permissions and optionally by tags.
-     *
-     * @param array $params
-     * @return mixed
-     */
-    public function paginateTickets($params)
-    {
-        $query = $this->ticket->join('taggables', 'taggables.taggable_id', '=', 'tickets.id')
-            ->where('taggables.taggable_type', 'App\Ticket')
-            ->join('tags', function(JoinClause $join) {
-                $join->on('tags.id', '=', 'taggables.tag_id');
-                $join->on('tags.type', '=', DB::raw("'status'"));
-            })->select('tickets.*')
-            ->distinct()
-            ->with(['user', 'tags', 'latest_reply', 'assignee'])
-            ->withCount('replies');
-
-        $tagId     = isset($params['tag_id']) ? $params['tag_id'] : null;
-        $assignee  = isset($params['assigned_to']) ? $params['assigned_to'] : null;
-        $requester = isset($params['user_id']) ? $params['user_id'] : null;
-        $perPage   = isset($params['per_page']) ? (int) $params['per_page'] : 15;
-        $page      = isset($params['page']) ? (int) $params['page'] : 1;
-
-        //if tag id is "mine" we need to get tickets assigned to current user
-        if ($tagId === 'mine' && ! $assignee) $assignee = Auth::user()->id;
-
-        //filter by tag
-        if ($tagId && $tagId !== 'mine') $query->filterByTag($tagId);
-
-        //filter by assignee
-        if ($assignee) $query->filterByAssignee($assignee);
-
-        //get only tickets that specified user has created
-        if ($requester) $query->filterByRequester($requester);
-
-        $total = $query->newQuery()->count('tickets.id');
-
-        $prefix = DB::getTablePrefix();
-        $items = $query->orderByRaw("FIELD({$prefix}tags.name, 'open', 'pending', 'closed', 'spam') asc, {$prefix}tickets.updated_at desc")->forPage($page, $perPage)->get();
-
-        //remove html tags from replies and limit to 1 reply
-        $items->each(function($ticket) {
-            if ($ticket->latest_reply) {
-                $ticket->latest_reply->body = str_limit(strip_tags($ticket->latest_reply->body), 300);
-            }
-        });
-
-        return new LengthAwarePaginator($items, $total, $perPage);
     }
 
     /**
@@ -309,7 +260,10 @@ class TicketRepository {
         DB::table('taggables')->insert($insert->toArray());
 
         //touch "update_at" timestamp for all tickets
-        $this->ticket->whereIn('id', $ticketIds)->update(['updated_at' => $this->ticket->freshTimestamp()]);
+        $this->ticket->whereIn('id', $ticketIds)->update([
+            'updated_at' => $this->ticket->freshTimestamp(),
+            'closed_at'  => $statusName === 'closed' ? Carbon::now() : null,
+        ]);
     }
 
 

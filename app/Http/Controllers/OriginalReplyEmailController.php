@@ -2,9 +2,10 @@
 
 use App\Services\Files\EmailStore;
 use App\Services\Ticketing\ReplyRepository;
-use Common\Core\Controller;
+use Common\Core\BaseController;
+use Illuminate\Http\JsonResponse;
 
-class OriginalReplyEmailController extends Controller
+class OriginalReplyEmailController extends BaseController
 {
     /**
      * ReplyRepository instance.
@@ -36,7 +37,7 @@ class OriginalReplyEmailController extends Controller
      * Get original email from which specified reply was created.
      *
      * @param int $replyId
-     * @return \Illuminate\Http\JsonResponse
+     * @return JsonResponse
      */
     public function show($replyId)
     {
@@ -46,7 +47,9 @@ class OriginalReplyEmailController extends Controller
 
         $original = $this->emailStore->getEmailForReply($reply);
 
-        if ( ! $original) return $this->error([], 404);
+        if ( ! $original) {
+            return $this->error(__('Could not find original reply.'), [], 404);
+        }
 
         return $this->success(['data' => $original]);
     }

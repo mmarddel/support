@@ -5,7 +5,6 @@ namespace App;
 use Carbon\Carbon;
 use Common\Files\FileEntry;
 use Eloquent;
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\MorphToMany;
 use Common\Tags\Tag as BaseTag;
 
@@ -19,6 +18,12 @@ use Common\Tags\Tag as BaseTag;
  * @property Carbon $updated_at
  * @property string $display_name
  * @mixin Eloquent
+ * @method static \Illuminate\Database\Eloquent\Builder|\App\Tag whereCreatedAt($value)
+ * @method static \Illuminate\Database\Eloquent\Builder|\App\Tag whereDisplayName($value)
+ * @method static \Illuminate\Database\Eloquent\Builder|\App\Tag whereId($value)
+ * @method static \Illuminate\Database\Eloquent\Builder|\App\Tag whereName($value)
+ * @method static \Illuminate\Database\Eloquent\Builder|\App\Tag whereType($value)
+ * @method static \Illuminate\Database\Eloquent\Builder|\App\Tag whereUpdatedAt($value)
  */
 class Tag extends BaseTag
 {

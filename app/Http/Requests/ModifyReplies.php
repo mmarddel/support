@@ -15,7 +15,7 @@ class ModifyReplies extends BaseFormRequest
             return $messages = [
                 'body'      => 'nullable|string|min:1',
                 'status'    => 'array',
-                'uploads'   => 'required_without:body|array|max:5',
+                'uploads'   => 'required_without:body|array|max:10',
                 'uploads.*' => 'required_without:body|integer|exists:file_entries,id'
             ];
         }

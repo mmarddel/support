@@ -1,8 +1,9 @@
 <?php namespace App\Services\Triggers\Actions;
 
-use App\Ticket;
 use App\Action;
-use App\Mail\NotifyUser;
+use App\Notifications\TriggerEmailAction;
+use App\Ticket;
+use App\Trigger;
 use Common\Auth\UserRepository;
 use Illuminate\Mail\Mailer;
 
@@ -33,9 +34,10 @@ class SendEmailToUserAction implements TriggerActionInterface {
      *
      * @param Ticket $ticket
      * @param Action $action
+     * @param Trigger $trigger
      * @return Ticket
      */
-    public function perform(Ticket $ticket, Action $action)
+    public function perform(Ticket $ticket, Action $action, Trigger $trigger)
     {
         $data = json_decode($action['pivot']['action_value'], true);
 
@@ -44,7 +46,7 @@ class SendEmailToUserAction implements TriggerActionInterface {
         $data['ticket'] = $ticket->toArray();
         $data['user'] = $user->toArray();
 
-        $this->mailer->queue(new NotifyUser($data));
+        $user->notify(new TriggerEmailAction($data));
 
         return $ticket;
     }

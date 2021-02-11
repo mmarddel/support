@@ -1,20 +1,17 @@
 <?php namespace App\Http\Controllers;
 
 use App\Services\Ticketing\ReplyRepository;
-use Common\Core\Controller;
+use Common\Core\BaseController;
+use Illuminate\Http\JsonResponse;
 
-class DraftUploadsController extends Controller {
+class DraftUploadsController extends BaseController {
 
     /**
-     * Reply repository instance.
-     *
      * @var ReplyRepository
      */
     private $replyRepository;
 
     /**
-     * TicketAttachmentsController constructor.
-     *
      * @param ReplyRepository $replyRepository
      */
     public function __construct(ReplyRepository $replyRepository)
@@ -23,12 +20,10 @@ class DraftUploadsController extends Controller {
     }
 
     /**
-     * Detach specified upload from reply.
-     *
      * @param integer $replyId
      * @param integer $uploadId
      *
-     * @return int
+     * @return JsonResponse
      */
     public function detach($replyId, $uploadId)
     {

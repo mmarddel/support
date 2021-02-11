@@ -59,7 +59,7 @@ class TwitterLoginValidator implements SettingsValidator
      */
     private function getErrorMessage(Exception $e)
     {
-        if (str_contains($e->getMessage(), 'code="415"')) {
+        if (\Str::contains($e->getMessage(), 'code="415"')) {
             return ['twitter_group' => 'Site url is not present in "Callback URL" field on your twitter app.'];
         }
 

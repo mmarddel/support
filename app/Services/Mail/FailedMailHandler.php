@@ -5,7 +5,7 @@ Use App\Ticket;
 use Common\Auth\UserRepository;
 use Common\Settings\Settings;
 use App\Services\Ticketing\TicketRepository;
-use Illuminate\Support\Arr;
+use Arr;
 
 class FailedMailHandler
 {
@@ -61,13 +61,11 @@ class FailedMailHandler
             'headers'     => $this->getHeaders($emailData),
         ];
 
-        $ticket = $this->ticketRepository->create([
+        return $this->ticketRepository->create([
             'body'    => view('tickets.failed-email-ticket-body')->with($data)->render(),
             'subject' => 'Failed Email Delivery Report',
             'user_id' => $user->id,
         ]);
-
-        return $ticket;
     }
 
     /**

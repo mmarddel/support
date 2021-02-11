@@ -198,7 +198,9 @@ class Oauth {
             $user->updatePurchases($purchases, $profile->nickname);
         }
 
-        return $this->getPopupResponse('SUCCESS_CONNECTED', ['user' => $user->load('social_profiles', 'roles')->toArray()]);
+        $user = $user->load('social_profiles')->loadPermissions()->toArray();
+
+        return $this->getPopupResponse('SUCCESS_CONNECTED', ['user' => $user]);
     }
 
     /**
@@ -231,7 +233,7 @@ class Oauth {
      */
     public function logUserIn($user, $returnView = true)
     {
-        $user = Auth::loginUsingId($user->id, true)->load('roles')->toArray();
+        $user = Auth::loginUsingId($user->id, true)->loadPermissions()->toArray();
 
         if ($returnView) {
             return $this->getPopupResponse('SUCCESS', ['user' => $user]);

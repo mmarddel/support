@@ -1,18 +1,15 @@
 <?php namespace Common\Auth\Controllers;
 
-use Symfony\Component\HttpKernel\Exception\HttpException;
-use Illuminate\Http\JsonResponse;
-use Mail;
-use App\User;
-use Common\Core\BootstrapData;
-use Common\Mail\ConfirmEmail;
-use Common\Settings\Settings;
-use Illuminate\Http\Request;
-use Common\Core\Controller;
+use Carbon\Carbon;
 use Common\Auth\UserRepository;
+use Common\Core\BaseController;
+use Common\Core\Bootstrap\BootstrapData;
+use Common\Settings\Settings;
+use Illuminate\Auth\Events\Registered;
 use Illuminate\Foundation\Auth\RegistersUsers;
+use Illuminate\Http\Request;
 
-class RegisterController extends Controller
+class RegisterController extends BaseController
 {
     use RegistersUsers;
 
@@ -44,73 +41,36 @@ class RegisterController extends Controller
 
         $this->middleware('guest');
 
-        //abort if registration should be disabled
+        // abort if registration should be disabled
         if ($this->settings->get('disable.registration')) abort(404);
     }
 
-    /**
-     * Handle a registration request for the application.
-     *
-     * @param Request $request
-     * @return JsonResponse
-     */
     public function register(Request $request)
     {
-        $rules = [
-            'email' => 'required|email|max:255|unique:users',
-            'password' => 'required|min:5|max:255|confirmed',
-        ];
-
-        $this->validate($request, $rules);
+        $this->validate($request, [
+            'email' => ['required', 'string', 'email', 'max:255', 'unique:users'],
+            'password' => ['required', 'string', 'min:5', 'confirmed'],
+        ]);
 
         $params = $request->all();
-        $needsConfirmation = $this->settings->get('require_email_confirmation');
-
-        if ($needsConfirmation) {
-            $code = str_random(30);
-            $params['confirmation_code'] = $code;
-            $params['confirmed'] = 0;
+        if ( ! $this->settings->get('require_email_confirmation')) {
+            $params['email_verified_at'] = Carbon::now();
         }
 
-        try {
-            $user = $this->create($params);
-        } catch (\Exception $e) {
-            if ($e->getCode() !== 422) throw ($e);
-            return $this->error(['*' => $e->getMessage()]);
+        event(new Registered($user = $this->repository->create($params)));
+
+        if ($user->hasVerifiedEmail()) {
+            $this->guard()->login($user);
         }
 
-        if ($needsConfirmation) {
-            Mail::queue(new ConfirmEmail($params['email'], $code));
-            return $this->success(['type' => 'confirmation_required']);
+        $response = ['status' => $user->hasVerifiedEmail() ? 'success' : 'needs_email_verification'];
+
+        if ($user->hasVerifiedEmail()) {
+            $response['bootstrapData'] = $this->bootstrapData->init()->getEncoded();
+        } else {
+            $response['message'] = 'We have sent you an email with instructions on how to activate your account.';
         }
 
-        $this->guard()->login($user);
-
-        return $this->registered($request, $user);
-    }
-
-    /**
-     * Create a new user instance after a valid registration.
-     *
-     * @param  array  $data
-     * @return User
-     */
-    protected function create(array $data)
-    {
-        return $this->repository->create($data);
-    }
-
-    /**
-     * The user has been registered.
-     *
-     * @param Request $request
-     * @param $user
-     *
-     * @return JsonResponse
-     */
-    protected function registered(Request $request, User $user)
-    {
-        $data = $this->bootstrapData->get();
-        return $this->success(['data' => $data]);
+        return $this->success($response);
     }
 }

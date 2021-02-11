@@ -2,6 +2,9 @@
 
 namespace App\Console\Commands;
 
+use App\Article;
+use App\Ticket;
+use App\User;
 use Common\Settings\DotEnvEditor;
 use Artisan;
 use Common\Settings\Setting;
@@ -66,6 +69,7 @@ class RefreshDemoSite extends Command
         $progress->advance();
 
         $tableNames = Schema::getConnection()->getDoctrineSchemaManager()->listTableNames();
+       
         foreach ($tableNames as $name) {
             if ($name === 'migrations') continue;
             DB::table($name)->truncate();
@@ -85,9 +89,9 @@ class RefreshDemoSite extends Command
         Artisan::call('db:seed', ['--force' => true, '--class' => DemoTicketsSeeder::class]);
         $progress->advance();
 
-        Artisan::call('scout:import', ['model' => 'App\Article']);
-        Artisan::call('scout:import', ['model' => 'App\User']);
-        Artisan::call('scout:import', ['model' => 'App\Ticket']);
+        Artisan::call('scout:import', ['model' => Article::class]);
+        Artisan::call('scout:import', ['model' => User::class]);
+        Artisan::call('scout:import', ['model' => Ticket::class]);
         $progress->advance();
 
         //menus
@@ -103,13 +107,15 @@ class RefreshDemoSite extends Command
         ])]);
 
         //other settings
-        $this->setting->where('name', 'branding.use_custom_theme')->update(['value' => 0]);
-        $this->setting->where('name', 'i18n.enable')->update(['value' => 0]);
-        $this->setting->where('name', 'mail.use_default_templates')->update(['value' => 1]);
+        $this->setting->where('name', 'i18n.enable')->update(['value' => false]);
+        $this->setting->where('name', 'cookie_notice.enable')->update(['value' => false]);
+        $this->setting->where('name', 'uploads.chunk')->update(['value' => false]);
+        $this->setting->where('name', 'uploads.max-size')->update(['value' => 4194304]); //4MB
+        $this->setting->where('name', 'mail.use_default_templates')->update(['value' => true]);
         $this->setting->where('name', 'realtime.pusher_key')->update(['value' => 'e6a31537e073f8bdce05']);
-        $this->setting->where('name', 'realtime.enable')->update(['value' => 1]);
+        $this->setting->where('name', 'realtime.enable')->update(['value' => true]);
         $this->setting->where('name', 'logging.sentry_public')->update(['value' => 'https://cc3692b6b6224c2ca965dea66017d565@sentry.io/203366']);
-        $this->dotEnvEditor->write(['SCOUT_DRIVER' => 'tntsearch']);
+        $this->dotEnvEditor->write(['SCOUT_DRIVER' => 'mysql']);
         $progress->advance();
 
         Artisan::call('cache:clear');

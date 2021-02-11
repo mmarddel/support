@@ -1,14 +1,16 @@
 <?php namespace App\Http\Controllers;
 
 use App\Trigger;
+use Common\Database\Paginator;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use App\Http\Requests\ModifyTriggers;
 use App\Services\Triggers\TriggerRepository;
-use Common\Core\Controller;
+use Common\Core\BaseController;
 use Illuminate\Http\Response;
 
-class TriggersController extends Controller
+class TriggersController extends BaseController
 {
     /**
      * @var TriggerRepository $trigger
@@ -31,22 +33,23 @@ class TriggersController extends Controller
     }
 
     /**
-     * Paginate all available triggers triggers.
-     *
      * @return JsonResponse
      */
     public function index()
     {
         $this->authorize('index', Trigger::class);
 
-        $pagination = $this->repository->paginate($this->request->all());
+        $paginator = (new Paginator(app(Trigger::class), $this->request->all()));
 
-        return $this->success(['pagination' => $pagination]);
+        $paginator->searchCallback = function(Builder $builder, $query) {
+            $builder->where('name', 'LIKE', "%$query%")
+                ->orWhere('description', 'LIKE', "$query%");
+        };
+
+        return $this->success(['pagination' => $paginator->paginate()]);
     }
 
     /**
-     * Return specified trigger.
-     *
      * @param integer $id
      * @return JsonResponse
      */
@@ -58,8 +61,6 @@ class TriggersController extends Controller
     }
 
     /**
-     * Create a new trigger.
-     *
      * @param ModifyTriggers $request
      * @return JsonResponse
      */
@@ -71,8 +72,6 @@ class TriggersController extends Controller
     }
 
     /**
-     * Update existing trigger.
-     *
      * @param integer $id
      * @param ModifyTriggers $request
      *
@@ -86,8 +85,6 @@ class TriggersController extends Controller
     }
 
     /**
-     * Delete triggers matching specified ids.
-     *
      * @return Response
      */
     public function destroy()

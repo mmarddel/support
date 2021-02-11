@@ -4,7 +4,9 @@ namespace App\Services\HelpCenter\Actions;
 
 use App\Article;
 use App\Category;
+use Illuminate\Contracts\Filesystem\FileNotFoundException;
 use Illuminate\Support\Collection;
+use Str;
 use Storage;
 use Symfony\Component\DomCrawler\Crawler;
 use ZipArchive;
@@ -25,9 +27,13 @@ class ExportHelpCenterImages
 
         if ($zip) {
             $names->each(function($name) use ($zip, $prefix) {
-                $contents = Storage::disk('public')->get($name);
-                $path = $prefix ? "$prefix/images/$name" : "images/$name";
-                $zip->addFromString($path, $contents);
+                try {
+                    $contents = Storage::disk('public')->get($name);
+                    $path = $prefix ? "$prefix/images/$name" : "images/$name";
+                    $zip->addFromString($path, $contents);
+                } catch (FileNotFoundException $e) {
+                    //
+                }
             });
         }
 
@@ -56,8 +62,8 @@ class ExportHelpCenterImages
             $crawler->addHtmlContent($article->body);
 
             $crawler->filter('img')->each(function (Crawler $node) use ($host, $names) {
-                if (str_contains($node->attr('src'), [$host, '/storage/article-images/'])) {
-                    $names->push(explode('/storage/', $node->attr('src'))[1]);
+                if (Str::contains($node->attr('src'), $host) || Str::startsWith($node->attr('src'), 'storage')) {
+                    $names->push(explode('storage/', $node->attr('src'))[1]);
                 }
             });
         });

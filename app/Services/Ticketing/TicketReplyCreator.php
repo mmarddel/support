@@ -1,5 +1,7 @@
 <?php namespace App\Services\Ticketing;
 
+use Exception;
+use Log;
 use Mail;
 use App\User;
 use App\Reply;
@@ -28,8 +30,6 @@ class TicketReplyCreator
     private $settings;
 
     /**
-     * TicketReplyCreator constructor.
-     *
      * @param TicketRepository $ticketRepository
      * @param ReplyRepository $replyRepository
      * @param Settings $settings
@@ -42,8 +42,6 @@ class TicketReplyCreator
     }
 
     /**
-     * Create a new reply for specified ticket.
-     *
      * @param Ticket $ticket
      * @param array $data
      * @param string $type
@@ -56,7 +54,7 @@ class TicketReplyCreator
         $reply = $this->replyRepository->create($data, $ticket, $type);
 
         if ($type === 'replies') {
-            $statusName = isset($data['status']) ? $data['status']['name'] : 'open';
+            $statusName = $data['status']['name'] ?? 'open';
 
             $ticket = $this->handleTimestamps($ticket, $creator, $statusName);
 
@@ -65,12 +63,18 @@ class TicketReplyCreator
 
             //send reply via email
             if ($this->settings->get('replies.send_email') && ($creator && $creator->isAgent())) {
-                Mail::send(new TicketReply($ticket, $reply));
+                try {
+                    Mail::send(new TicketReply($ticket, $reply));
+                } catch (Exception $e) {
+                    Log::error($e);
+                }
             }
         }
 
-        event(new TicketUpdated($ticket));
-        event(new TicketReplyCreated($ticket, $reply));
+        if ($type !== 'drafts') {
+            event(new TicketReplyCreated($ticket, $reply));
+            event(new TicketUpdated($ticket));
+        }
 
         return $reply->load('user', 'uploads');
     }

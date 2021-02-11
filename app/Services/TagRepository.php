@@ -1,35 +1,29 @@
 <?php namespace App\Services;
 
-use Common\Database\Paginator;
-use DB;
-use Auth;
 use App\Tag;
 use App\Ticket;
-use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Auth;
+use DB;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\QueryException;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
+use Illuminate\Database\Eloquent\Relations\MorphToMany;
 use Illuminate\Support\Arr;
 
 class TagRepository {
 
     /**
-     * Tag model instance.
-     *
      * @var Tag
      */
     private $tag;
 
     /**
-     * Ticket model instance.
-     *
      * @var Ticket
      */
     private $ticket;
 
     /**
-     * Create new TagRepository instance.
-     *
      * @param Tag $tag
      * @param Ticket $ticket
      */
@@ -43,7 +37,7 @@ class TagRepository {
      * Find tag by id or throw error.
      *
      * @param integer $id
-     * @throws \Illuminate\Database\Eloquent\ModelNotFoundException
+     * @throws ModelNotFoundException
      *
      * @return Tag
      */
@@ -70,71 +64,71 @@ class TagRepository {
     /**
      * Get all tags with category/status type and tickets count for each tag.
      *
-     * @return Collection
+     * @return \Illuminate\Support\Collection
      */
     public function getStatusAndCategoryTags()
     {
-        $statusTags = $this->tag->where('type', 'status')->withCount('tickets')->get();
+        $activeTickets = $this->ticket->whereHas('tags', function(Builder $q) {
+            $q->where('name', 'open');
+        })->select(['id', 'assigned_to'])->with(['tags' => function(MorphToMany $q) {
+            $q->select('id');
+        }])->limit(100)->get();
 
-        //for category tags, only count tickets that are "open" or "pending"
-        $categoryTags = $this->tag->where('type', 'category')->withCount(['tickets' => function($q) {
-            $q->whereHas('tags', function($q) {
-                $q->where('name', 'open')->orWhere('name', 'pending');
+        $unassigned = 'unassigned';
+        $mine = 'mine';
+        $assigned = 'assigned';
+        $closed = 'closed';
+
+        $viewTags = collect([
+            [
+                'name' => $unassigned,
+                'id' => $unassigned,
+                'display_name' => ucfirst($unassigned),
+                'type' => 'view',
+                'tickets_count' => $activeTickets->filter(function(Ticket $ticket) {
+                    return !$ticket->assigned_to;
+                })->count(),
+            ],
+            [
+                'id' => $mine,
+                'name' => $mine,
+                'type' => 'view',
+                'display_name' => ucfirst($mine),
+                'tickets_count' => $activeTickets->filter(function(Ticket $ticket) {
+                    return $ticket->assigned_to === Auth::id();
+                })->count(),
+            ],
+            [
+                'name' => $assigned,
+                'id' => $assigned,
+                'display_name' => ucfirst($assigned),
+                'type' => 'view',
+                'tickets_count' => $activeTickets->filter(function(Ticket $ticket) {
+                    return !!$ticket->assigned_to && $ticket->assigned_to !== Auth::id();
+                })->count(),
+            ],
+            [
+                'name' => $closed,
+                'id' => $closed,
+                'display_name' => ucfirst($closed),
+                'type' => 'view',
+            ],
+        ]);
+
+        $statusTags = $this->tag->where('type', 'status')->get();
+
+        $categoryTags = $this->tag->where('type', 'category')
+            ->whereHas('tickets')
+            ->with('categories')
+            ->get()
+            ->map(function(Tag $tag) use($activeTickets) {
+                $tag->tickets_count = $activeTickets->filter(function(Ticket $ticket) use($tag) {
+                    return $ticket->tags->contains($tag);
+                })->count();
+                return $tag;
             });
-        }])->with('categories')->get();
 
-        $collection = $statusTags->merge($categoryTags);
-
-        if (Auth::check()) {
-            $collection = $collection->add($this->getMineTicketsTag());
-        }
-
-        return $collection;
-    }
-
-    /**
-     * Get tag for 'mine' tickets in agents mailbox.
-     *
-     * @return array
-     */
-    private function getMineTicketsTag() {
-        return [
-            'id' => 'mine',
-            'name' => 'mine',
-            'type' => 'status',
-            'display_name' => 'Mine',
-            'tickets_count' => $this->ticket->where('assigned_to', Auth::user()->id)->count(),
-        ];
-    }
-
-    /**
-     * Paginate all tags using given params.
-     *
-     * @param array $params
-     * @return LengthAwarePaginator
-     */
-    public function paginateTags($params)
-    {
-        $paginator = (new Paginator($this->tag));
-        $skipStatus = isset($params['skip_status_tags']) ? $params['skip_status_tags'] : null;
-
-        // don't show category tags in "tags" page in admin area
-        // as they will be shown in "ticket categories" page.
-        $skipCategory = Arr::get($params, 'type') !== 'category';
-
-        if (isset($params['type'])) {
-            $paginator->where('type', $params['type']);
-        }
-
-        if ($skipStatus) {
-            $paginator->where('type', '!=', 'status');
-        }
-
-        if ($skipCategory) {
-            $paginator->where('type', '!=', 'category');
-        }
-
-        return $paginator->paginate($params);
+        return $viewTags->merge($statusTags)->merge($categoryTags)->values();
     }
 
     /**
@@ -152,34 +146,6 @@ class TagRepository {
         } else {
             return $this->tag->where('type', $type)->get();
         }
-    }
-
-    /**
-     * Return tags matching given names. Create any that does not exist yet.
-     *
-     * @param array  $tagNames
-     * @param string $type
-     *
-     * @return Collection
-     */
-    public function getByNamesOrCreate($tagNames, $type = 'custom')
-    {
-        //fetch existing tags
-        $existing = $this->findByName($tagNames);
-
-        //if all tags we need already exist, return them
-        if (count($existing) === count($tagNames)) return $existing;
-
-        //get tag names that we need to create
-        $toCreate = array_diff($tagNames, $existing->pluck('name')->toArray());
-
-        //create tags
-        $this->tag->insert(array_map(function($tagName) use($type) {
-            return ['name' => $tagName, 'type' => $type];
-        }, $toCreate));
-
-        //return all tags
-        return $this->findByName($tagNames);
     }
 
     /**

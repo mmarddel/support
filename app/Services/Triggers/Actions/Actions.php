@@ -3,6 +3,7 @@
 use App;
 use App\Ticket;
 use App\Trigger;
+use Illuminate\Support\Str;
 
 class Actions {
 
@@ -12,14 +13,14 @@ class Actions {
      * @param Ticket $ticket
      * @param Trigger $trigger
      *
-     * @returns Ticket
+     * @return Ticket
      */
     public function perform(Ticket $ticket, Trigger $trigger)
     {
         foreach($trigger->actions as $actionModel) {
             $action = $this->getAction($actionModel->name);
 
-            $ticket = $action->perform($ticket, $actionModel);
+            $ticket = $action->perform($ticket, $actionModel, $trigger);
 
             //if action aborts triggers cycle (for example deletes ticket)
             //we need to bail instantly and not run any more actions after it
@@ -84,6 +85,6 @@ class Actions {
      */
     protected function getActionClassName($actionName)
     {
-        return ucfirst(camel_case($actionName)).'Action';
+        return ucfirst(Str::camel($actionName)).'Action';
     }
 }

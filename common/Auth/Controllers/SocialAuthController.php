@@ -7,9 +7,9 @@ use Exception;
 use Common\Auth\Oauth;
 use Illuminate\Http\Request;
 use Common\Settings\Settings;
-use Common\Core\Controller;
+use Common\Core\BaseController;
 
-class SocialAuthController extends Controller
+class SocialAuthController extends BaseController
 {
     /**
      * @var Oauth
@@ -138,13 +138,15 @@ class SocialAuthController extends Controller
         // get data for this social login persisted in session
         $data = $this->oauth->getPersistedData();
 
-        if ( ! $data) return $this->error();
+        if ( ! $data) {
+            return $this->error(__('Could not log you in. Please try again.'));
+        }
 
         // validate user supplied extra credentials
         $errors = $this->oauth->validateExtraCredentials($this->request->all());
 
         if ( ! empty($errors)) {
-            return $this->error($errors);
+            return $this->error(__('Specified credentials are not valid'), $errors);
         }
 
         if ( ! isset($data['profile']->email)) {

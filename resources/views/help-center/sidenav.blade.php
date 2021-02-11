@@ -1,10 +1,10 @@
 <div class="hc-sidenav left">
     @foreach($category['children'] as $childCategory)
-        <h3 class="highlight-item {{str_slug($childCategory['name'])}}">{{$childCategory['name']}}</h3>
+        <h3 class="highlight-item {{slugify($childCategory['name'])}}">{{$childCategory['name']}}</h3>
         <ul>
             @foreach($childCategory['articles'] as $article)
                 <li>
-                    <a href="{{'../' . str_slug($childCategory['name']) . '/' . str_slug($article['title']) . '.html'}}" class="highlight-item {{str_slug($article['title'])}}">{{$article['title']}}</a>
+                    <a href="{{'../' . slugify($childCategory['name']) . '/' . slugify($article['title']) . '.html'}}" class="highlight-item {{slugify($article['title'])}}">{{$article['title']}}</a>
                 </li>
             @endforeach
         </ul>

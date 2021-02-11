@@ -1,36 +1,31 @@
 <?php namespace Common\Auth\Controllers;
 
+use Common\Auth\Events\UserAvatarChanged;
+use Illuminate\Filesystem\FilesystemAdapter;
+use Illuminate\Http\JsonResponse;
 use Storage;
 use App\User;
 use Illuminate\Http\Request;
-use Common\Core\Controller;
+use Common\Core\BaseController;
 
-class UserAvatarController extends Controller {
+class UserAvatarController extends BaseController {
 
     /**
-     * Laravel request instance.
-     *
      * @var Request
      */
     private $request;
 
     /**
-     * User instance.
-     *
      * @var User
      */
     private $user;
 
     /**
-     * Storage service instance with disk set to public.
-     *
-     * @var \Illuminate\Filesystem\FilesystemAdapter
+     * @var FilesystemAdapter
      */
     private $storage;
 
     /**
-     * UserAvatarController constructor.
-     *
      * @param Request $request
      * @param User $user
      */
@@ -42,10 +37,8 @@ class UserAvatarController extends Controller {
     }
 
     /**
-     * Store avatar on disk and attach it to specified user.
-     *
      * @param int $userId
-     * @return User
+     * @return JsonResponse
      */
     public function store($userId) {
 
@@ -54,24 +47,29 @@ class UserAvatarController extends Controller {
         $this->authorize('update', $user);
 
         $this->validate($this->request, [
-            'avatar' => 'required|image|max:1500',
+            'file' => 'required|image|max:1500',
         ]);
 
-        //delete old user avatar
-        $this->storage->delete($user->getOriginal('avatar'));
+        // delete old user avatar
+        $this->storage->delete($user->getRawOriginal('avatar'));
 
-        //store new avatar on public disk
-        $path = $this->request->file('avatar')->storePublicly('avatars', ['disk' => 'public']);
+        // store new avatar on public disk
+        $path = $this->request->file('file')
+            ->storePublicly('avatars', ['disk' => 'public']);
 
-        //attach avatar to user model
-        $user->fill(['avatar' => $path])->save();
+        // attach avatar to user model
+        $user->avatar = $path;
+        $user->save();
 
-        return $user;
+        event(new UserAvatarChanged($user));
+
+        return $this->success([
+            'user' => $user,
+            'fileEntry' => ['url' => Storage::disk('public')->url($path)]
+        ]);
     }
 
     /**
-     * Delete specified user's avatar and detach it from user model.
-     *
      * @param int $userId
      * @return User
      */
@@ -81,9 +79,12 @@ class UserAvatarController extends Controller {
 
         $this->authorize('update', $user);
 
-        $this->storage->delete($user->getOriginal('avatar'));
+        $this->storage->delete($user->getRawOriginal('avatar'));
 
-        $user->fill(['avatar' => null])->save();
+        $user->avatar = null;
+        $user->save();
+
+        event(new UserAvatarChanged($user));
 
         return $user;
     }

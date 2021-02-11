@@ -3,17 +3,15 @@
 return [
 
     /*
-    |--------------------------------------------------------------------------
-    | Default Filesystem Disk
-    |--------------------------------------------------------------------------
-    |
-    | Here you may specify the default filesystem disk that should be used
-    | by the framework. A "local" driver, as well as a variety of cloud
-    | based drivers are available for your choosing. Just store away!
-    |
-    | Supported: "local", "ftp", "s3", "rackspace"
-    |
-    */
+      |--------------------------------------------------------------------------
+      | Default Filesystem Disk
+      |--------------------------------------------------------------------------
+      |
+      | Here you may specify the default filesystem disk that should be used
+      | by the framework. The "local" disk, as well as a variety of cloud
+      | based disks are available to your application. Just store away!
+      |
+      */
 
     'default' => env('FILESYSTEM_DRIVER', 'local'),
 
@@ -39,95 +37,40 @@ return [
     | may even configure multiple disks of the same driver. Defaults have
     | been setup for each driver as an example of the required options.
     |
+    | Supported Drivers: "local", "ftp", "sftp", "s3"
+    |
     */
 
     'disks' => [
-
         'local' => [
             'driver' => 'local',
             'root' => storage_path('app'),
         ],
 
+        'uploads' => [
+            'driver' => 'dynamic-uploads',
+        ],
+
         'public' => [
-            'driver' => 'local',
-            'root' => env('USE_SYMLINKS') ? storage_path('app/public') : public_path('storage'),
-            'url' => env('APP_URL').'/storage',
+            'driver' => 'dynamic-public',
             'visibility' => 'public',
+            'url' => 'storage',
         ],
+    ],
 
-        's3' => [
-            'driver' => 's3',
-            'key' => 'your-key',
-            'secret' => 'your-secret',
-            'region' => 'your-region',
-            'bucket' => 'your-bucket',
-        ],
+    /*
+   |--------------------------------------------------------------------------
+   | Symbolic Links
+   |--------------------------------------------------------------------------
+   |
+   | Here you may configure the symbolic links that will be created when the
+   | `storage:link` Artisan command is executed. The array keys should be
+   | the locations of the links and the values should be their targets.
+   |
+   */
 
-        /**
-         * UPLOADS
-         */
-
-        'uploads_local' => [
-            'driver' => 'local',
-            'root' => storage_path('app/uploads'),
-        ],
-
-        'uploads_ftp' => [
-            'driver' => 'ftp',
-            'root' => env('UPLOADS_FTP_ROOT', '/'),
-            'host' => env('UPLOADS_FTP_HOST'),
-            'username' => env('UPLOADS_FTP_USERNAME'),
-            'password' => env('UPLOADS_FTP_PASSWORD'),
-            'port' => env('UPLOADS_FTP_PORT', 21),
-            'passive' => env('UPLOADS_FTP_PASSIVE'),
-            'ssl' => env('UPLOADS_FTP_SSL'),
-        ],
-
-        'uploads_dropbox' => [
-            'driver' => 'dropbox',
-            'root' => env('UPLOADS_DROPBOX_ROOT', '/'),
-            'access_token' => env('UPLOADS_DROPBOX_ACCESS_TOKEN')
-        ],
-
-        'uploads_backblaze' => [
-            'driver' => 'backblaze',
-            'account_id' => env('UPLOADS_BACKBLAZE_ACCOUNT_ID'),
-            'application_key' => env('UPLOADS_BACKBLAZE_APPLICATION_KEY'),
-            'bucket' => env('UPLOADS_BACKBLAZE_BUCKET'),
-        ],
-
-        'uploads_s3' => [
-            'driver' => 's3',
-            'key' => env('UPLOADS_S3_KEY'),
-            'secret' => env('UPLOADS_S3_SECRET'),
-            'region' => env('UPLOADS_S3_REGION'),
-            'bucket' => env('UPLOADS_S3_BUCKET'),
-            'endpoint' => env('UPLOADS_S3_ENDPOINT'),
-        ],
-
-        'uploads_digitalocean' => [
-            'driver' => 'digitalocean',
-            'key' => env('UPLOADS_DIGITALOCEAN_KEY'),
-            'secret' => env('UPLOADS_DIGITALOCEAN_SECRET'),
-            'region' => env('UPLOADS_DIGITALOCEAN_REGION'),
-            'bucket' => env('UPLOADS_DIGITALOCEAN_BUCKET'),
-        ],
-
-        'uploads_rackspace' => [
-            'driver'    => 'rackspace',
-            'username'  => env('UPLOADS_RACKSPACE_USERNAME'),
-            'key'       => env('UPLOADS_RACKSPACE_KEY'),
-            'container' => env('UPLOADS_RACKSPACE_CONTAINER'),
-            'endpoint'  => 'https://identity.api.rackspacecloud.com/v2.0/',
-            'region'    => env('UPLOADS_RACKSPACE_REGION', 'IAD'),
-            'url_type'  => 'publicURL',
-        ],
-
-        'legacy_local' => [
-            'driver' => env('FILESYSTEM_DRIVER', 'local'),
-            'root' => base_path(''),
-        ]
-
+    'links' => [
+        public_path('storage') => storage_path('app/public'),
     ],
 
 ];

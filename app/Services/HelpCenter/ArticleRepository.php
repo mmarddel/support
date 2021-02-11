@@ -1,5 +1,7 @@
 <?php namespace App\Services\HelpCenter;
 
+use App\Tag;
+use Common\Settings\Settings;
 use DB;
 use App\Article;
 use App\ArticleFeedback;
@@ -9,7 +11,8 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
-use Illuminate\Support\Arr;
+use Arr;
+use Str;
 
 class ArticleRepository {
 
@@ -29,9 +32,6 @@ class ArticleRepository {
     private $feedback;
 
     /**
-     * Create new ArticleRepository instance.
-     *
-
      * @param Article $article
      * @param TagRepository $tagRepository
      * @param ArticleFeedback $feedback
@@ -53,17 +53,13 @@ class ArticleRepository {
      */
     public function findOrFail($id, $params)
     {
-        $article = $this->article
-            ->with('tags')
+        return $this->article
+            ->with('tags', 'uploads')
             ->withCategories(Arr::get($params, 'categories'))
             ->findOrFail($id);
-
-        return $article;
     }
 
     /**
-     * Create a new article from specified params.
-     *
      * @param array $params
      * @return Article
      */
@@ -80,7 +76,14 @@ class ArticleRepository {
 
         $article->categories()->attach($params['categories']);
 
-        $this->handleTags($article, $params, 'store');
+        if (! is_null($params['uploads'])) {
+            $article->uploads()->sync($params['uploads']);
+        }
+
+        if (isset($params['tags'])) {
+            $tags = app(Tag::class)->insertOrRetrieve($params['tags']);
+            $article->tags()->sync($tags->pluck('id'));
+        }
 
         return $article;
     }
@@ -114,7 +117,14 @@ class ArticleRepository {
             $article->categories()->sync($params['categories']);
         }
 
-        $this->handleTags($article, $params, 'update');
+        if ( ! is_null($params['uploads'])) {
+            $article->uploads()->sync($params['uploads']);
+        }
+
+        if (isset($params['tags'])) {
+            $tags = app(Tag::class)->insertOrRetrieve($params['tags']);
+            $article->tags()->sync($tags->pluck('id'));
+        }
 
         return $article;
     }
@@ -147,10 +157,10 @@ class ArticleRepository {
      */
     public function paginateArticles($params)
     {
-        $paginator = $this->getIndexQuery($params)->paginate(isset($params['per_page']) ? $params['per_page'] : 15);
+        $paginator = $this->getIndexQuery($params)->paginate(isset($params['perPage']) ? $params['perPage'] : 15);
 
         $paginator->map(function($article) {
-            $article['body'] = str_limit(strip_tags(html_entity_decode($article['body'])), 200);
+            $article['body'] = Str::limit(strip_tags(html_entity_decode($article['body'])), 200);
             return $article;
         });
 
@@ -183,24 +193,6 @@ class ArticleRepository {
         if ( ! $feedback) $feedback = $this->feedback->newInstance();
 
         return $feedback->fill($params)->save();
-    }
-
-
-    /**
-     * Attach or Sync tags for article depending on http method.
-     *
-     * @param Article $article
-     * @param array     $params
-     * @param string    $type
-     */
-    private function handleTags(Article $article, $params, $type = 'store')
-    {
-        $method = $type === 'store' ? 'attach' : 'sync';
-
-        if (isset($params['tags'])) {
-            $tags = $this->tagRepository->getByNamesOrCreate($params['tags']);
-            $article->tags()->$method($tags->pluck('id')->toArray());
-        }
     }
 
     /**
@@ -238,21 +230,22 @@ class ArticleRepository {
         }
 
         //order
-        if (isset($params['orderBy'])) {
-            $order = explode('|', $params['orderBy']);
-            $column = (isset($order[0]) && in_array($order[0], $this->article->orderFields)) ? $order[0] : 'views';
-            $direction = isset($order[1]) ? $order[1] : 'desc';
+        $defaultOrder = app(Settings::class)->get('articles.default_order', 'position|desc');
+        $order = explode('|', Arr::get($params, 'orderBy', $defaultOrder));
+        $column = (isset($order[0]) && in_array($order[0], $this->article->orderFields)) ? $order[0] : 'views';
+        $direction = isset($order[1]) ? $order[1] : 'desc';
 
-            //order articles by the amount of 'was helpful' user
-            //feedback they have in article_feedback table
-            if ($order[0] === 'was_helpful') {
-                $query->orderByFeedback($direction);
-            }
+        //order articles by the amount of 'was helpful' user
+        //feedback they have in article_feedback table
+        if ($order[0] === 'was_helpful') {
+            $query->orderByFeedback($direction);
+        } else if ($order[0] === 'position') {
+            $query->orderByPosition();
+        }
 
-            //do a regular order, by a column in main articles table
-            else {
-                $query->orderBy($column, $direction);
-            }
+        //do a regular order, by a column in main articles table
+        else {
+            $query->orderBy($column, $direction);
         }
 
         return $query;

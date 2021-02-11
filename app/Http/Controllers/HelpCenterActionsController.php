@@ -5,11 +5,11 @@ use App\Services\HelpCenter\Actions\ExportHelpCenterImages;
 use App\Services\HelpCenter\Actions\ImportHelpCenter;
 use Auth;
 use Illuminate\Http\Request;
-use Common\Core\Controller;
+use Common\Core\BaseController;
 use Storage;
 use Symfony\Component\HttpFoundation\Response;
 
-class HelpCenterActionsController extends Controller
+class HelpCenterActionsController extends BaseController
 {
     /**
      * @var Request

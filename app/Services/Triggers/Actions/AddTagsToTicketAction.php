@@ -1,6 +1,7 @@
 <?php namespace App\Services\Triggers\Actions;
 
 use App\Action;
+use App\Tag;
 use App\Ticket;
 use App\Services\TagRepository;
 
@@ -28,14 +29,15 @@ class AddTagsToTicketAction implements TriggerActionInterface {
      *
      * @param Ticket $ticket
      * @param Action $action
+     * @param \App\Trigger $trigger
      * @return Ticket
      */
-    public function perform(Ticket $ticket, Action $action)
+    public function perform(Ticket $ticket, Action $action, \App\Trigger $trigger)
     {
         $tags = json_decode($action->pivot['action_value'])->tags_to_add;
         $tags = explode(',', $tags);
 
-        $tags = $this->tagRepository->getByNamesOrCreate($tags);
+        $tags = app(Tag::class)->insertOrRetrieve($tags);
 
         $this->tagRepository->attachById($ticket, $tags->pluck('id')->toArray());
 

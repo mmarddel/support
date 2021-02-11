@@ -1,17 +1,17 @@
 <?php namespace App;
 
-use DB;
 use Carbon\Carbon;
+use DB;
 use Eloquent;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\hasMany;
 use Illuminate\Database\Eloquent\Relations\hasOne;
 use Illuminate\Database\Eloquent\Relations\MorphToMany;
 use Illuminate\Support\Arr;
 use Laravel\Scout\Searchable;
-use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Builder;
 
 /**
  * App\Ticket
@@ -22,17 +22,15 @@ use Illuminate\Database\Eloquent\Builder;
  * @property Carbon $closed_at
  * @property Carbon $created_at
  * @property Carbon $updated_at
+ * @property string created_at_formatted
+ * @property string created_at_month
  * @property integer $closed_by
  * @property integer $assigned_to
  * @property-read User $user
  * @property-read Collection|Tag[] $tags
  * @property-read Collection|Reply[] $replies
- * @method static \Illuminate\Database\Query\Builder|Ticket filterByTag($tag = null)
- * @method static \Illuminate\Database\Query\Builder|Ticket filterByAssignee($agentId)
- * @method static \Illuminate\Database\Query\Builder|Ticket filterByRequester($userId)
- * @method static \Illuminate\Database\Query\Builder|Ticket compact()
  * @mixin Eloquent
- * @property-read mixed $status
+ * @property-read string $status
  * @property-read mixed $uploads_count
  * @property-read Collection|Tag[] $categories
  * @property-read Collection|Reply[] $latest_replies
@@ -42,6 +40,7 @@ use Illuminate\Database\Eloquent\Builder;
  * @property-read int $attachments_count
  * @property-read Reply $latest_creator_reply
  * @property-read Reply $repliesCount
+ * @property-read User $assignee
  */
 class Ticket extends Model
 {
@@ -61,7 +60,7 @@ class Ticket extends Model
             $array['replies'] = $array['replies']->implode(',');
             $array['user'] = Arr::get($array, 'user.email');
         }
-
+        
         return $array;
     }
 
@@ -158,7 +157,7 @@ class Ticket extends Model
      */
     public function latest_replies()
     {
-        return $this->hasMany('App\Reply')->where('type', 'replies')->orderBy('created_at', 'desc')->limit(5);
+        return $this->hasMany(Reply::class)->where('type', Reply::REPLY_TYPE)->orderBy('created_at', 'desc')->limit(5);
     }
 
     /**
@@ -168,7 +167,9 @@ class Ticket extends Model
      */
     public function latest_reply()
     {
-        return $this->hasOne('App\Reply')->where('type', 'replies')->orderBy('created_at', 'desc');
+        return $this->hasOne(Reply::class)
+            ->where('type', Reply::REPLY_TYPE)
+            ->orderBy('created_at', 'desc');
     }
 
     /**
@@ -178,7 +179,13 @@ class Ticket extends Model
      */
     public function notes()
     {
-        return $this->hasMany('App\Reply')->orderBy('created_at', 'desc')->where('type', 'notes');
+        return $this->hasMany(Reply::class)->orderBy('created_at', 'desc')->where('type', Reply::NOTE_TYPE);
+    }
+
+    public function scopeOrderByStatus(Builder $query)
+    {
+        $prefix = DB::getTablePrefix();
+        return $query->orderByRaw("FIELD(status, 'open', 'pending', 'closed', 'spam') asc, {$prefix}tickets.updated_at desc");
     }
 
     public function getUpdatedAtFormattedAttribute()
@@ -196,7 +203,7 @@ class Ticket extends Model
     {
         return $this->where('subject', 'LIKE', "%$query%")
             ->orWhereHas('replies', function(Builder $q) use ($query) {
-                return $q->where('type', 'replies')->where('body', 'LIKE', "%$query%");
+                return $q->where('type', Reply::REPLY_TYPE)->where('body', 'LIKE', "%$query%");
             });
     }
 
@@ -209,7 +216,7 @@ class Ticket extends Model
     {
         //if tags are already loaded, use those records to avoid extra db query
         if ($this->relationLoaded('tags')) {
-            $tag = array_first($this->tags, function($tag) {
+            $tag = Arr::first($this->tags, function($tag) {
                 return $tag['type'] === 'status';
             });
 
@@ -232,8 +239,9 @@ class Ticket extends Model
     {
         if (is_numeric($value)) return (integer) $value;
 
-        return DB::table('file_entry_models')->whereIn('model_id', function (Builder $query)
+        return DB::table('file_entry_models')->whereIn('model_id', function ($query)
             {
+                /** @var $query Builder */
                 return $query
                     ->from('replies')
                     ->where('replies.ticket_id', $this->id)
@@ -241,61 +249,5 @@ class Ticket extends Model
             })
             ->where('model_type', Reply::class)
             ->count();
-    }
-
-    /**
-     * Apply given filter to query.
-     *
-     * @param Builder $q
-     * @param string|integer $tag
-     * @return Builder
-     */
-    public function scopeFilterByTag($q, $tag)
-    {
-        return $q->whereHas('tags', function(Builder $query) use($tag) {
-            $query->where('tag_id', (int) $tag);
-        });
-    }
-
-    /**
-     * Filter tickets by given agent ID.
-     *
-     * @param Builder $q
-     * @param string|int $agentId
-     * @return Builder
-     */
-    public function scopeFilterByAssignee($q, $agentId)
-    {
-        if ( ! $agentId) return $q;
-
-        return $q->where('assigned_to', (int) $agentId);
-    }
-
-    /**
-     * Filter tickets by given user ID.
-     *
-     * @param Builder $q
-     * @param int|string $userId
-     * @return Builder
-     */
-    public function scopeFilterByRequester($q, $userId)
-    {
-        if ( ! $userId) return $q;
-
-        return $q->where('tickets.user_id', (int) $userId);
-    }
-
-    /**
-     * Return only minimal data for each model.
-     *
-     * @param Builder $query
-     * @param int $length
-     * @return mixed
-     */
-    public function scopeCompact($query, $length = 200)
-    {
-        return $query->with(['latest_reply' => function($q) use($length) {
-            return $q->select('id', 'ticket_id', DB::raw("SUBSTR(body, 1, $length) as body"));
-        }]);
     }
 }

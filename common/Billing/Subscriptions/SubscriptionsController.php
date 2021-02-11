@@ -6,10 +6,10 @@ use Common\Billing\Subscription;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Common\Core\Controller;
+use Common\Core\BaseController;
 use Common\Database\Paginator;
 
-class SubscriptionsController extends Controller
+class SubscriptionsController extends BaseController
 {
     /**
      * @var Request
@@ -53,8 +53,8 @@ class SubscriptionsController extends Controller
     {
         $this->authorize('index', Subscription::class);
 
-        $paginator = (new Paginator($this->subscription))
-            ->with('user');
+        $paginator = (new Paginator($this->subscription, $this->request->all()))->with('user');
+        $paginator->filterColumns = ['gateway', 'cancelled'];
 
         $paginator->searchCallback = function(Builder $query, $searchTerm) {
             $query->whereHas('user', function(Builder $query) use($searchTerm) {
@@ -62,7 +62,7 @@ class SubscriptionsController extends Controller
             })->orWhere('gateway', 'like', "$searchTerm%");
         };
 
-        $pagination = $paginator->paginate($this->request->all());
+        $pagination = $paginator->paginate();
 
         return $this->success(['pagination' => $pagination]);
     }
@@ -94,7 +94,6 @@ class SubscriptionsController extends Controller
      *
      * @param int $id
      * @return JsonResponse
-     * @throws \Illuminate\Auth\Access\AuthorizationException
      */
     public function update($id)
     {
@@ -133,7 +132,8 @@ class SubscriptionsController extends Controller
 
         $subscription->changePlan($plan);
 
-        return $this->success(['user' => $subscription->user()->first()]);
+        $user = $subscription->user()->first();
+        return $this->success(['user' => $user->load('subscriptions.plan')]);
     }
 
     /**
@@ -141,7 +141,6 @@ class SubscriptionsController extends Controller
      *
      * @param int $id
      * @return JsonResponse
-     * @throws \Exception
      */
     public function cancel($id)
     {
@@ -151,14 +150,20 @@ class SubscriptionsController extends Controller
 
         /** @var Subscription $subscription */
         $subscription = $this->subscription->findOrFail($id);
+        $user = $subscription->user()->first();
 
         if ($this->request->get('delete')) {
             $subscription->cancelAndDelete();
+            $user->update([
+                'card_last_four' => null,
+                'card_brand' => null,
+                'stripe_id' => null,
+            ]);
         } else {
             $subscription->cancel();
         }
 
-        return $this->success(['user' => $subscription->user()->first()]);
+        return $this->success(['user' => $user->load('subscriptions.plan')]);
     }
 
     /**
@@ -166,7 +171,6 @@ class SubscriptionsController extends Controller
      *
      * @param int $id
      * @return JsonResponse
-     * @throws \Common\Billing\GatewayException
      */
     public function resume($id)
     {

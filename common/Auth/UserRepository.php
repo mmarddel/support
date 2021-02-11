@@ -2,15 +2,20 @@
 
 use App\User;
 use Common\Auth\Events\UserCreated;
+use Common\Auth\Events\UsersDeleted;
+use Common\Auth\Permissions\Traits\SyncsPermissions;
 use Common\Auth\Roles\Role;
-use Common\Settings\Settings;
+use Common\Domains\Actions\DeleteCustomDomains;
+use Common\Domains\CustomDomain;
 use Common\Files\Actions\Deletion\PermanentlyDeleteEntries;
+use Common\Settings\Settings;
 use Exception;
-use Illuminate\Contracts\Pagination\LengthAwarePaginator;
-use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\Collection;
+use Arr;
+use Str;
 
 class UserRepository {
+
+    use SyncsPermissions;
 
     /**
      * User model instance.
@@ -32,8 +37,6 @@ class UserRepository {
     protected $settings;
 
     /**
-     * UserRepository constructor.
-     *
      * @param User $user
      * @param Role $role
      * @param Settings $settings
@@ -62,52 +65,6 @@ class UserRepository {
     }
 
     /**
-     * Paginate all users using given params.
-     *
-     * @param array $params
-     * @return LengthAwarePaginator|Collection|User[]
-     */
-    public function paginateUsers($params)
-    {
-        $orderBy    = isset($params['order_by']) ? $params['order_by'] : 'created_at';
-        $orderDir   = isset($params['order_dir']) ? $params['order_dir'] : 'desc';
-        $perPage    = isset($params['per_page']) ? $params['per_page'] : 13;
-        $searchTerm = isset($params['query']) ? $params['query'] : null;
-        $roleId    = isset($params['role_id']) ? (int) $params['role_id'] : null;
-        $roleName  = isset($params['role_name']) ? $params['role_name'] : null;
-        $permission  = isset($params['permission']) ? $params['permission'] : null;
-
-        $query = $this->user->with('roles');
-
-        if ($searchTerm) {
-            $query->where('email', 'LIKE', "%$searchTerm%");
-        }
-
-        if ($roleId) {
-            $query->whereHas('roles', function($q) use($roleId) {
-                $q->where('roles.id', $roleId);
-            });
-        }
-
-        if ($roleName) {
-            $query->whereHas('roles', function($q) use($roleName) {
-                $q->where('roles.name', $roleName);
-            });
-        }
-
-        if ($permission) {
-            // TODO: refactor permissions into separate table for easier query
-            $query
-                ->where('permissions', 'REGEXP', "$permission|admin")
-                ->orWhereHas('roles', function(Builder $query) use($permission) {
-                    return $query->where('permissions', 'REGEXP', "$permission|admin");
-                });
-        }
-
-        return $query->orderBy($orderBy, $orderDir)->paginate($perPage);
-    }
-
-    /**
      * Return first user matching attributes or create a new one.
      *
      * @param array $params
@@ -125,21 +82,22 @@ class UserRepository {
     }
 
     /**
-     * Create a new user and assign default customer role to it.
-     *
-     * @throws Exception
-     *
      * @param array $params
      * @return User
      */
     public function create($params)
     {
         /** @var User $user */
+        $params['api_token'] = Str::random(40);
         $user = $this->user->forceCreate($this->formatParams($params));
 
         try {
             if ( ! isset($params['roles']) || ! $this->attachRoles($user, $params['roles'])) {
                 $this->assignDefaultRole($user);
+            }
+
+            if ($permissions = Arr::get($params, 'permissions')) {
+                $this->syncPermissions($user, $permissions);
             }
         } catch (Exception $e) {
             //delete user if there were any errors creating/assigning
@@ -154,8 +112,6 @@ class UserRepository {
     }
 
     /**
-     * Update given user.
-     *
      * @param User $user
      * @param array $params
      *
@@ -165,27 +121,31 @@ class UserRepository {
     {
         $user->forceFill($this->formatParams($params, 'update'))->save();
 
-        if (isset($params['roles'])) {
-            $this->attachRoles($user, $params['roles']);
+        // make sure roles and permission are not removed
+        // if they are not specified at all in params
+        if (array_key_exists('roles', $params)) {
+            $this->attachRoles($user, Arr::get($params, 'roles'));
+        }
+        if (array_key_exists('permissions', $params)) {
+            $this->syncPermissions($user, Arr::get($params, 'permissions'));
         }
 
-        return $user->load('roles');
+        return $user->load(['roles', 'permissions']);
     }
 
     /**
-     * Delete multiple users.
-     *
-     * @param array $ids
-     * @return array
+     * @param \Illuminate\Support\Collection $ids
+     * @return integer
      */
     public function deleteMultiple($ids)
     {
-        foreach ($ids as $id) {
-            $user = $this->user->find($id);
-            if (is_null($user)) continue;
+        $users = $this->user->whereIn('id', $ids)->get();
 
+        $users->each(function(User $user) {
             $user->social_profiles()->delete();
             $user->roles()->detach();
+            $user->notifications()->delete();
+            $user->permissions()->detach();
 
             if ($user->subscribed()) {
                 $user->subscriptions->each->cancelAndDelete();
@@ -195,9 +155,14 @@ class UserRepository {
 
             $entryIds = $user->entries(['owner' => true])->pluck('file_entries.id');
             app(PermanentlyDeleteEntries::class)->execute($entryIds);
-        }
+        });
 
-        return $ids;
+        $domainIds = app(CustomDomain::class)->whereIn('user_id', $ids)->pluck('id');
+        app(DeleteCustomDomains::class)->execute($domainIds->toArray());
+
+        event(new UsersDeleted($users));
+
+        return $users->count();
     }
 
     /**
@@ -210,30 +175,30 @@ class UserRepository {
     protected function formatParams($params, $type = 'create')
     {
         $formatted = [
-            'avatar'      => isset($params['avatar']) ? $params['avatar'] : null,
             'first_name'  => isset($params['first_name']) ? $params['first_name'] : null,
             'last_name'   => isset($params['last_name']) ? $params['last_name'] : null,
             'language'    => isset($params['language']) ? $params['language'] : config('app.locale'),
             'country'     => isset($params['country']) ? $params['country'] : null,
             'timezone'    => isset($params['timezone']) ? $params['timezone'] : null,
-            'confirmed'   => isset($params['confirmed']) ? $params['confirmed'] : 1,
-            'confirmation_code' => isset($params['confirmation_code']) ? $params['confirmation_code'] : null,
         ];
+
+        if (isset($params['api_token'])) {
+            $formatted['api_token'] = $params['api_token'];
+        }
+
+        if (isset($params['email_verified_at'])) {
+            $formatted['email_verified_at'] = $params['email_verified_at'];
+        }
 
         if (array_key_exists('available_space', $params)) {
             $formatted['available_space'] = is_null($params['available_space']) ? null : (int) $params['available_space'];
         }
 
-        //cast permission values to integer
-        if (isset($params['permissions'])) {
-            $formatted['permissions'] = array_map(function($value) {
-                return (int) $value;
-            }, $params['permissions']);
-        }
-
         if ($type === 'create') {
             $formatted['email'] = $params['email'];
-            $formatted['password'] = isset($params['password']) ? bcrypt($params['password']) : null;
+            $formatted['password'] = Arr::get($params, 'password') ? bcrypt($params['password']) : null;
+        } else if ($type === 'update' && Arr::get($params, 'password')) {
+            $formatted['password'] = bcrypt($params['password']);
         }
 
         return $formatted;
@@ -250,7 +215,9 @@ class UserRepository {
      */
     public function attachRoles(User $user, $roles, $type = 'sync')
     {
-        if (empty($roles)) return 0;
+        if (empty($roles) && $type === 'attach') {
+            return 0;
+        }
         $roleIds = $this->role->whereIn('id', $roles)->get()->pluck('id');
         return $user->roles()->$type($roleIds);
     }
@@ -277,7 +244,7 @@ class UserRepository {
      */
     public function addPermissions(User $user, $permissions)
     {
-        $existing = $user->permissions;
+        $existing = $user->loadPermissions()->permissions;
 
         foreach ($permissions as $permission) {
             $existing[$permission] = 1;
@@ -297,7 +264,7 @@ class UserRepository {
      */
     public function removePermissions(User $user, $permissions)
     {
-        $existing = $user->permissions;
+        $existing = $user->loadPermissions()->permissions;
 
         foreach ($permissions as $permission) {
             unset($existing[$permission]);

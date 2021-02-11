@@ -12,8 +12,6 @@ class LocalizationsTableSeeder extends Seeder
     private $repository;
 
     /**
-     * LocalizationsTableSeeder constructor.
-     *
      * @param LocalizationsRepository $repository
      */
     public function __construct(LocalizationsRepository $repository)
@@ -22,8 +20,6 @@ class LocalizationsTableSeeder extends Seeder
     }
 
     /**
-     * Run the database seeds.
-     *
      * @return void
      */
     public function run()
@@ -33,7 +29,7 @@ class LocalizationsTableSeeder extends Seeder
         if ($localizations->isNotEmpty()) {
             $this->mergeExistingTranslationLines($localizations);
         } else {
-            $this->repository->create('english');
+            $this->repository->create(['name' => 'english', 'language' => 'en']);
         }
     }
 

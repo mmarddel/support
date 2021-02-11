@@ -1,6 +1,8 @@
 <?php namespace App\Services\Envato;
 
 use Cache;
+use Carbon\Carbon;
+use Common\Core\HttpClient;
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\TransferException;
 
@@ -13,7 +15,7 @@ class EnvatoApiClient
      */
     private $http;
 
-    public function __construct(Client $http)
+    public function __construct(HttpClient $http)
     {
         $this->http = $http;
     }
@@ -28,10 +30,14 @@ class EnvatoApiClient
     {
         if ( ! $code) return null;
 
-       return Cache::remember("purchase.$code", 10, function() use($code) {
+       return Cache::remember("purchase.$code", Carbon::now()->addMinutes(10), function() use($code) {
             try {
                 $response = $this->call('author/sale', ['code' => $code]);
-                return array_merge($response['item'], ['buyer' => $response['buyer']]);
+                if ( ! isset($response['item'])) {
+                    return null;
+                }
+                $response['code'] = $code;
+                return $response;
             } catch(TransferException $e) {
                 return null;
             }
@@ -84,6 +90,6 @@ class EnvatoApiClient
             'query'   => $params,
         ]);
 
-        return json_decode($response->getBody()->getContents(), true) ?: [];
+        return $response ?: [];
     }
 }

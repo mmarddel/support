@@ -1,12 +1,14 @@
 <?php namespace Common\Auth\Controllers;
 
-use Illuminate\Http\Request;
+use App\User;
+use Auth;
+use Common\Core\BaseController;
+use Common\Core\Bootstrap\BootstrapData;
 use Common\Settings\Settings;
-use Common\Core\Controller;
-use Common\Core\BootstrapData;
 use Illuminate\Foundation\Auth\AuthenticatesUsers;
+use Illuminate\Http\Request;
 
-class LoginController extends Controller
+class LoginController extends BaseController
 {
     use AuthenticatesUsers;
 
@@ -21,8 +23,6 @@ class LoginController extends Controller
     private $settings;
 
     /**
-     * Create a new controller instance.
-     *
      * @param BootstrapData $bootstrapData
      * @param Settings $settings
      */
@@ -34,54 +34,22 @@ class LoginController extends Controller
         $this->settings = $settings;
     }
 
-    /**
-     * Validate the user login request.
-     *
-     * @param  \Illuminate\Http\Request  $request
-     * @return void
-     */
     protected function validateLogin(Request $request)
     {
         $this->validate($request, [
-            $this->username() => 'required|string|email_confirmed',
+            $this->username() => 'required|string|email_verified',
             'password' => 'required|string',
         ]);
     }
 
-    /**
-     * The user has been authenticated.
-     *
-     * @return mixed
-     */
-    protected function authenticated()
+    protected function authenticated(Request $request, User $user)
     {
-        $data = $this->bootstrapData->get();
+        if ($this->settings->get('single_device_login')) {
+            Auth::logoutOtherDevices($request->get('password'));
+        }
+
+        $data = $this->bootstrapData->init()->getEncoded();
+
         return $this->success(['data' => $data]);
-    }
-
-    /**
-     * Get the failed login response instance.
-     *
-     * @return \Illuminate\Http\JsonResponse
-     */
-    protected function sendFailedLoginResponse()
-    {
-        return $this->error(['general' => __('auth.failed')]);
-    }
-
-    /**
-     * Log the user out of the application.
-     *
-     * @param  \Illuminate\Http\Request $request
-     * @return \Illuminate\Http\Response
-     */
-    public function logout(Request $request)
-    {
-        $this->guard()->logout();
-        $request->session()->flush();
-        $request->session()->regenerate();
-        $request->session()->regenerateToken();
-
-        return $this->success();
     }
 }

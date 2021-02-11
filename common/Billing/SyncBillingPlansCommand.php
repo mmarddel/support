@@ -1,5 +1,6 @@
 <?php namespace Common\Billing;
 
+use App;
 use Illuminate\Console\Command;
 use Common\Billing\Plans\BillingPlansController;
 
@@ -26,7 +27,7 @@ class SyncBillingPlansCommand extends Command
      */
     public function handle()
     {
-        \App::make(BillingPlansController::class)->sync();
+        App::make(BillingPlansController::class)->sync();
 
         $this->info('Synced plans successfully.');
     }

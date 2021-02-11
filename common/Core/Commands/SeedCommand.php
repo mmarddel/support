@@ -3,44 +3,36 @@
 use File;
 use Illuminate\Console\Command;
 use Illuminate\Database\Eloquent\Model;
-use Common\Admin\Appearance\CssThemeGenerator;
+use Illuminate\Database\Seeder;
+use Str;
 
 class SeedCommand extends Command
 {
     /**
-     * The name and signature of the console command.
-     *
      * @var string
      */
     protected $signature = 'common:seed';
 
     /**
-     * The console command description.
-     *
      * @var string
      */
     protected $description = 'Execute all common package seeders.';
 
     /**
-     * @var CssThemeGenerator;
-     */
-    protected $generator;
-
-    /**
-     * Execute the console command.
-     *
-     * @return mixed
+     * @return void
      */
     public function handle()
     {
-        $paths = File::files(__DIR__ . '/../../Database/Seeds');
+        $paths = collect(File::files(__DIR__ . '/../../Database/Seeds'));
 
-        foreach ($paths as $path) {
-             Model::unguarded(function () use ($path) {
-                 $namespace = 'Common\Database\Seeds\\'.basename($path, '.php');
-                 $this->getSeeder($namespace)->__invoke();
-             });
-        }
+        $paths->filter(function($path) {
+            return Str::endsWith($path, '.php');
+        })->each(function($path) {
+            Model::unguarded(function () use ($path) {
+                $namespace = 'Common\Database\Seeds\\'.basename($path, '.php');
+                $this->getSeeder($namespace)->__invoke();
+            });
+        });
 
         $this->info('Seeded database successfully.');
     }
@@ -49,7 +41,7 @@ class SeedCommand extends Command
      * Get a seeder instance from the container.
      *
      * @param string $namespace
-     * @return \Illuminate\Database\Seeder
+     * @return Seeder
      */
     protected function getSeeder($namespace)
     {

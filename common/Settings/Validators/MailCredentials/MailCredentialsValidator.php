@@ -3,9 +3,13 @@
 namespace Common\Settings\Validators\MailCredentials;
 
 use Auth;
+use Aws\Ses\Exception\SesException;
+use Common\Settings\DotEnvEditor;
 use Config;
 use GuzzleHttp\Exception\ClientException;
-use Illuminate\Support\Arr;
+use Illuminate\Mail\MailServiceProvider;
+use Arr;
+use Str;
 use Mail;
 use Exception;
 use Common\Settings\Validators\SettingsValidator;
@@ -25,10 +29,13 @@ class MailCredentialsValidator implements SettingsValidator
         $this->setConfigDynamically($settings);
 
         try {
-           Mail::to(Auth::user()->email)->send(new MailCredentialsMailable());
+            Mail::to(Auth::user()->email)->send(new MailCredentialsMailable());
         } catch (Exception $e) {
+            app(DotEnvEditor::class)->write(['MAIL_SETUP' => false]);
             return $this->getErrorMessage($e);
         }
+
+        app(DotEnvEditor::class)->write(['MAIL_SETUP' => true]);
     }
 
     private function setConfigDynamically($settings)
@@ -39,12 +46,21 @@ class MailCredentialsValidator implements SettingsValidator
 
             // "mail.*" credentials go into "mail.php" config
             // file, other credentials go into "services.php"
-            if ( ! starts_with($key, 'mail.')) {
+            if ($key === 'mail.driver') {
+                $key = 'mail.default';
+            } else if ($key === 'mail_from_address') {
+                $key = 'mail.from.address';
+            } else if ( ! Str::startsWith($key, 'mail.')) {
                 $key = "services.$key";
+            } else {
+                $key = str_replace('mail.', 'mail.mailers.smtp.', $key);
             }
 
             Config::set($key, $value);
         }
+
+        // make sure laravel uses newly set config
+        (new MailServiceProvider(app()))->register();
     }
 
     /**
@@ -58,9 +74,16 @@ class MailCredentialsValidator implements SettingsValidator
             $message = $this->getSmtpMessage($e);
         } else if (config('mail.driver') === 'mailgun') {
             $message = $this->getMailgunMessage($e);
+        } else if (config('mail.driver') === 'ses') {
+            $message = $this->getSesMessage($e);
         }
 
-        return $message ?: $this->getDefaultMessage();
+        return $message ?: $this->getDefaultMessage($e);
+    }
+
+    private function getSesMessage(SesException $e)
+    {
+        return ['mail_group' => $e->getAwsErrorMessage()];
     }
 
     private function getMailgunMessage(ClientException $e)
@@ -72,9 +95,9 @@ class MailCredentialsValidator implements SettingsValidator
         }
         $message = strtolower(Arr::get($errResponse, 'message', $errResponse));
 
-        if (str_contains($message, 'domain not found')) {
+        if (\Str::contains($message, 'domain not found')) {
             return ['mailgun_domain' => 'This mailgun domain is not valid.'];
-        } else if (str_contains($message, 'forbidden')) {
+        } else if (\Str::contains($message, 'forbidden')) {
             return ['mailgun_secret' => 'This mailgun API Key is not valid.'];
         }
 
@@ -87,13 +110,13 @@ class MailCredentialsValidator implements SettingsValidator
      */
     private function getSmtpMessage(Exception $e)
     {
-        if (str_contains($e->getMessage(), 'Connection timed out #110')) {
+        if (\Str::contains($e->getMessage(), 'Connection timed out #110')) {
             return ['mail_group' => 'Connection to mail server timed out. This usually indicates incorrect mail credentials. Please double check them.'];
         }
     }
 
-    private function getDefaultMessage()
+    private function getDefaultMessage(Exception $e)
     {
-        return ['mail_group' => 'Could not validate mail credentials. Please double check them.'];
+        return ['mail_group' => "Could not validate mail credentials: <br> {$e->getMessage()}"];
     }
 }

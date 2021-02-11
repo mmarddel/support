@@ -49,5 +49,7 @@ class DeleteLooseUploads extends Command
 
         //delete entries
         $entry->whereIn('id', $ids)->delete();
+
+        $this->info('Loose uploads deleted.');
     }
 }

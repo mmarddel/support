@@ -24,6 +24,9 @@ use Illuminate\Database\Eloquent\Model;
  * @method static \Illuminate\Database\Query\Builder|\App\Operator whereValidationRules($value)
  * @property string $type
  * @method static \Illuminate\Database\Query\Builder|\App\Operator whereType($value)
+ * @method static \Illuminate\Database\Eloquent\Builder|\App\Operator newModelQuery()
+ * @method static \Illuminate\Database\Eloquent\Builder|\App\Operator newQuery()
+ * @method static \Illuminate\Database\Eloquent\Builder|\App\Operator query()
  */
 class Operator extends Model
 {

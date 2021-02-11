@@ -19,7 +19,22 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @mixin Eloquent
  * @property string $url
  * @property string $image
- * @property string $supported_until
+ * @property Carbon $supported_until
+ * @property string|null $envato_username
+ * @method static \Illuminate\Database\Eloquent\Builder|\App\PurchaseCode whereCode($value)
+ * @method static \Illuminate\Database\Eloquent\Builder|\App\PurchaseCode whereCreatedAt($value)
+ * @method static \Illuminate\Database\Eloquent\Builder|\App\PurchaseCode whereEnvatoUsername($value)
+ * @method static \Illuminate\Database\Eloquent\Builder|\App\PurchaseCode whereId($value)
+ * @method static \Illuminate\Database\Eloquent\Builder|\App\PurchaseCode whereImage($value)
+ * @method static \Illuminate\Database\Eloquent\Builder|\App\PurchaseCode whereItemId($value)
+ * @method static \Illuminate\Database\Eloquent\Builder|\App\PurchaseCode whereItemName($value)
+ * @method static \Illuminate\Database\Eloquent\Builder|\App\PurchaseCode whereSupportedUntil($value)
+ * @method static \Illuminate\Database\Eloquent\Builder|\App\PurchaseCode whereUpdatedAt($value)
+ * @method static \Illuminate\Database\Eloquent\Builder|\App\PurchaseCode whereUrl($value)
+ * @method static \Illuminate\Database\Eloquent\Builder|\App\PurchaseCode whereUserId($value)
+ * @method static \Illuminate\Database\Eloquent\Builder|\App\PurchaseCode newModelQuery()
+ * @method static \Illuminate\Database\Eloquent\Builder|\App\PurchaseCode newQuery()
+ * @method static \Illuminate\Database\Eloquent\Builder|\App\PurchaseCode query()
  */
 class PurchaseCode extends Model
 {
