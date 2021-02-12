@@ -17,6 +17,8 @@ jobs:
       # - image: circleci/mysql:5.7-ram
       #
       # - image: redis:2.8.19
+      - orbs:
+            yarn: itinerisltd/yarn@2.1.1
 
     steps:
       - checkout
