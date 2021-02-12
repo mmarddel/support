@@ -17,8 +17,7 @@ jobs:
       # - image: circleci/mysql:5.7-ram
       #
       # - image: redis:2.8.19
-      - orbs:
-            yarn: itinerisltd/yarn@2.1.1
+
 
     steps:
       - checkout
@@ -56,11 +55,11 @@ jobs:
           keys:
             - node-v1-{{ checksum "package.json" }}
             - node-v1-
-      - run: yarn install
-      - save_cache:
-          key: node-v1-{{ checksum "package.json" }}
-          paths:
-            - node_modules
+      #- run: yarn install
+      #- save_cache:
+      #    key: node-v1-{{ checksum "package.json" }}
+      #    paths:
+      #      - node_modules
 
       # prepare the database
       - run: touch storage/testing.sqlite
