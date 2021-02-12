@@ -39,6 +39,9 @@ jobs:
       - run: composer update
 
       - run: composer install
+      - run:
+            name: Install NodeJS
+            command: sudo apt-get install nodejs && npm install --global yarm
 
       - save_cache:
           key: v1-dependencies-{{ checksum "composer.json" }}
