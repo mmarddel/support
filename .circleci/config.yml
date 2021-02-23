@@ -1,65 +1,96 @@
-# PHP CircleCI 2.0 configuration file
-#
-# Check https://circleci.com/docs/2.0/language-php/ for more details
-#
 version: 2
+
 jobs:
-  build:
+  plan-apply:
+    working_directory: /tmp/project
     docker:
-      # Specify the version you desire here
-      - image: circleci/php:7.2-browsers
-
-      # Specify service dependencies here if necessary
-      # CircleCI maintains a library of pre-built images
-      # documented at https://circleci.com/docs/2.0/circleci-images/
-      # Using the RAM variation mitigates I/O contention
-      # for database intensive operations.
-      # - image: circleci/mysql:5.7-ram
-      #
-      # - image: redis:2.8.19
-
-
+      - image: docker.mirror.hashicorp.services/hashicorp/terraform:light
     steps:
       - checkout
-
-      - run: sudo apt update # PHP CircleCI 2.0 Configuration File# PHP CircleCI 2.0 Configuration File sudo apt install zlib1g-dev libsqlite3-dev
-      - run: sudo docker-php-ext-install zip
-
       - run:
-            name: Install extensions
-            command: sudo apt-get install libpng-dev
-      - run: sudo docker-php-ext-install -j$(nproc) gd
-
-      # Download and cache dependencies
-      - restore_cache:
-          keys:
-            # "composer.lock" can be used if it is committed to the repo
-            - v1-dependencies-{{ checksum "composer.json" }}
-            # fallback to using the latest cache if no exact match is found
-            - v1-dependencies-
-      - run: composer update
-
-      - run: composer install
-
-      - save_cache:
-          key: v1-dependencies-{{ checksum "composer.json" }}
+          name: terraform init & plan
+          command: |
+            terraform init -input=false
+            terraform plan -out tfapply -var-file variables.tfvars
+      - persist_to_workspace:
+          root: .
           paths:
-            - ./vendor
-      #- restore_cache:
-      #    keys:
-      #      - node-v1-{{ checksum "package.json" }}
-      #      - node-v1-
-      #- run: yarn install
-      #- save_cache:
-      #    key: node-v1-{{ checksum "package.json" }}
-      #    paths:
-      #      - node_modules
+            - .
+  apply:
+    docker:
+      - image: docker.mirror.hashicorp.services/hashicorp/terraform:light
+    steps:
+      - attach_workspace:
+          at: .
+      - run:
+          name: terraform
+          command: |
+            terraform apply -auto-approve tfapply
+      - persist_to_workspace:
+          root: .
+          paths:
+            - .
+  apply:
+  docker:
+    - image: docker.mirror.hashicorp.services/hashicorp/terraform:light
+  steps:
+    - attach_workspace:
+        at: .
+    - run:
+        name: terraform
+        command: |
+          terraform apply -auto-approve tfapply
+    - persist_to_workspace:
+        root: .
+        paths:
+          - .
 
-      # prepare the database
-      #- run: touch storage/testing.sqlite
-      #- run: php artisan migrate --env=testing --database=sqlite_testing --force
+  plan-destroy:
+  docker:
+    - image: docker.mirror.hashicorp.services/hashicorp/terraform:light
+  steps:
+    - attach_workspace:
+        at: .
+    - run:
+        name: terraform create destroy plan
+        command: |
+          terraform plan -destroy -out tfdestroy -var-file variables.tfvars
+    - persist_to_workspace:
+        root: .
+        paths:
+          - .
 
-      # run tests with phpunit or codecept
-      #- run: ./vendor/bin/phpunit
-      #- run: ./vendor/bin/codecept build
-      #- run: ./vendor/bin/codecept run
+  destroy:
+    docker:
+      - image: docker.mirror.hashicorp.services/hashicorp/terraform:light
+    steps:
+      - attach_workspace:
+          at: .
+      - run:
+          name: terraform destroy
+          command: |
+            terraform apply -auto-approve tfdestroy
+
+workflows:
+  version: 2
+  plan_approve_apply:
+    jobs:
+      - plan-apply
+      - hold-apply:
+          type: approval
+          requires:
+            - plan-apply
+      - apply:
+          requires:
+            - hold-apply
+      - plan-destroy:
+          requires:
+            - apply
+      - hold-destroy:
+          type: approval
+          requires:
+            - plan-destroy
+      - destroy:
+          requires:
+            - hold-destroy
+g
