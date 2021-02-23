@@ -34,3 +34,6 @@ testem.log
 
 #System Files
 .DS_Store
+
+#circleci
+.circleci/config-1.yml
