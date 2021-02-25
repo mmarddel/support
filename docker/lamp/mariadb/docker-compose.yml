@@ -1,5 +1,0 @@
- mariadb:
-         build:
-              context: ./mariadb
-         volumes:
-              - ./mariadb_data:/var/lib/mysql
